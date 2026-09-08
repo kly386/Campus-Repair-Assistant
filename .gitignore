@@ -1,0 +1,24 @@
+# 前端依赖
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# 后端编译产物
+backend/target/
+backend/*.iml
+
+# IDE 配置
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 操作系统文件
+Thumbs.db
+.DS_Store
+
+# 日志
+*.log
+
+# 本地配置（不提交密钥）
+application-local.yml
