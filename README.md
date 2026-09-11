@@ -16,8 +16,23 @@
 ## 技术栈
 
 - **前端**：Vue 3 + Vite + Element Plus + ECharts
-- **后端**：Spring Boot + MyBatis + MySQL
+- **后端**：Spring Boot + JPA + MySQL
 - **AI**：大语言模型 API 接入
+
+## 开发环境与软件版本
+
+| 软件 | 版本 |
+|------|------|
+| Java | 25 (Oracle JDK) |
+| Maven | 3.9.16 |
+| Spring Boot | 4.0.0 |
+| Node.js | 23.11.0 |
+| npm | 10.9.2 |
+| Vue | 3.5.10 |
+| Vite | 5.4.8 |
+| Element Plus | 2.8.4 |
+| ECharts | 5.5.1 |
+| MySQL | 8.x |
 
 ## 项目结构
 
