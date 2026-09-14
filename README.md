@@ -25,7 +25,7 @@
 
 | 软件 | 版本 |
 |------|------|
-| Java | 25 (Oracle JDK) |
+| Java | 25 |
 | Maven | 3.9.16 |
 | Spring Boot | 4.0.0 |
 | Node.js | 23.11.0 |
