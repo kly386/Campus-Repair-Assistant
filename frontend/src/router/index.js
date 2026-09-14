@@ -6,10 +6,12 @@ const routes = [
     path: '/',
     component: Layout,
     children: [
-      { path: '', redirect: '/dashboard' },
-      { path: 'dashboard', name: 'Dashboard', component: () => import('../views/Dashboard.vue') },
-      { path: 'evaluation', name: 'Evaluation', component: () => import('../views/Evaluation.vue') },
-      { path: 'report', name: 'Report', component: () => import('../views/Report.vue') }
+      { path: '', redirect: '/repair' },
+      { path: 'repair', name: 'Repair', component: () => import('../views/Repair.vue') },
+      { path: 'diagnosis', name: 'Diagnosis', component: () => import('../views/Diagnosis.vue') },
+      { path: 'orders', name: 'Orders', component: () => import('../views/Orders.vue') },
+      { path: 'schedule', name: 'Schedule', component: () => import('../views/Schedule.vue') },
+      { path: 'dashboard', name: 'Dashboard', component: () => import('../views/Dashboard.vue') }
     ]
   }
 ]
