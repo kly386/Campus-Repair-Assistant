@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS `repair_order` (
     `title`           VARCHAR(100) NOT NULL COMMENT '故障标题',
     `description`     TEXT         COMMENT '故障描述(原文)',
     `ai_parsed_info`  TEXT         COMMENT 'AI解析的结构化信息(JSON)',
+    `ai_confidence`   FLOAT        DEFAULT NULL COMMENT 'AI置信度(0~1)',
     `category_id`     BIGINT       DEFAULT NULL COMMENT '故障类别ID',
     `emergency_level` VARCHAR(20)  NOT NULL DEFAULT 'LOW' COMMENT '紧急度: LOW/MEDIUM/HIGH',
     `student_id`      BIGINT       NOT NULL COMMENT '报修学生ID',
@@ -62,6 +63,7 @@ CREATE TABLE IF NOT EXISTS `repair_order` (
     `version`         BIGINT       NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     `create_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `update_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `finish_time`     DATETIME     DEFAULT NULL COMMENT '完成时间(看板统计用)',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_order_no` (`order_no`),
     UNIQUE KEY `uk_idempotency_key` (`idempotency_key`),
@@ -92,16 +94,22 @@ CREATE TABLE IF NOT EXISTS `worker_schedule` (
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS `knowledge_base` (
     `id`           BIGINT       NOT NULL AUTO_INCREMENT COMMENT '知识ID',
+    `title`        VARCHAR(100) DEFAULT NULL COMMENT '标题(兼容旧设计)',
     `keyword`      VARCHAR(100) NOT NULL COMMENT '关键词',
     `question`     VARCHAR(255) NOT NULL COMMENT '问题',
     `answer`       TEXT         NOT NULL COMMENT '答案/解决方案',
+    `content`      TEXT         DEFAULT NULL COMMENT '内容(兼容旧设计)',
     `category_id`  BIGINT       DEFAULT NULL COMMENT '关联故障类别',
     `source`       VARCHAR(20)  DEFAULT NULL COMMENT '来源: MANUAL(手册)/ORDER(工单沉淀)',
     `source_order_id` BIGINT    DEFAULT NULL COMMENT '来源工单ID(工单沉淀时)',
     `helpful`      INT          NOT NULL DEFAULT 0 COMMENT '被评价有帮助次数',
+    `review_status` VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT '审核状态: PENDING/APPROVED/REJECTED/OFFLINE',
+    `embedding`    BLOB         DEFAULT NULL COMMENT '向量化结果(可选)',
     `create_time`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
-    KEY `idx_keyword` (`keyword`)
+    KEY `idx_keyword` (`keyword`),
+    KEY `idx_review_status` (`review_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='维修知识库表';
 
 -- -----------------------------------------------------

@@ -29,6 +29,9 @@ public class RepairOrder {
     @Column(name = "ai_parsed_info", columnDefinition = "TEXT")
     private String aiParsedInfo;
 
+    @Column(name = "ai_confidence")
+    private Double aiConfidence;
+
     @Column(name = "category_id")
     private Long categoryId;
 
@@ -73,4 +76,7 @@ public class RepairOrder {
 
     @Column(name = "update_time")
     private LocalDateTime updateTime;
+
+    @Column(name = "finish_time")
+    private LocalDateTime finishTime;
 }
