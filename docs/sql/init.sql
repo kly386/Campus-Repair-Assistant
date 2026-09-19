@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS `repair_category` (
 CREATE TABLE IF NOT EXISTS `repair_order` (
     `id`              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '工单ID',
     `order_no`        VARCHAR(32)  NOT NULL COMMENT '工单编号',
+    `idempotency_key` VARCHAR(64)  NOT NULL COMMENT '幂等键(前端生成,防重复提交)',
     `title`           VARCHAR(100) NOT NULL COMMENT '故障标题',
     `description`     TEXT         COMMENT '故障描述(原文)',
     `ai_parsed_info`  TEXT         COMMENT 'AI解析的结构化信息(JSON)',
@@ -58,10 +59,12 @@ CREATE TABLE IF NOT EXISTS `repair_order` (
     `assign_reason`   VARCHAR(255) DEFAULT NULL COMMENT '派单决策理由',
     `status`          VARCHAR(20)  NOT NULL DEFAULT 'SUBMITTED' COMMENT '状态: SUBMITTED/ASSIGNED/ON_THE_WAY/PROCESSING/PENDING_ACCEPT/COMPLETED/CANCELLED/RESCHEDULED',
     `result`          TEXT         COMMENT '维修结论',
+    `version`         BIGINT       NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     `create_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `update_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_order_no` (`order_no`),
+    UNIQUE KEY `uk_idempotency_key` (`idempotency_key`),
     KEY `idx_student` (`student_id`),
     KEY `idx_worker` (`worker_id`),
     KEY `idx_status` (`status`),
@@ -146,6 +149,24 @@ CREATE TABLE IF NOT EXISTS `notification` (
     PRIMARY KEY (`id`),
     KEY `idx_user` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='通知消息表';
+
+-- -----------------------------------------------------
+-- 9. 自助诊断会话表（RAG 问答记录，用于自修解决率统计）
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `diagnosis_session` (
+    `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '会话ID',
+    `user_id`       BIGINT       NOT NULL COMMENT '提问学生ID',
+    `question`      VARCHAR(500) NOT NULL COMMENT '问题',
+    `answer`        TEXT         COMMENT 'RAG返回的答案',
+    `category_id`   BIGINT       DEFAULT NULL COMMENT '识别到的故障类别',
+    `matched_kb_id` BIGINT       DEFAULT NULL COMMENT '命中知识条ID',
+    `similarity`    DECIMAL(5,4) DEFAULT NULL COMMENT '检索相似度(0~1)',
+    `is_solved`     TINYINT      NOT NULL DEFAULT 0 COMMENT '是否自助解决: 1是/0否',
+    `create_time`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '提问时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_user` (`user_id`),
+    KEY `idx_kb` (`matched_kb_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='自助诊断会话表';
 
 -- -----------------------------------------------------
 -- 初始数据：默认管理员
