@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS `repair_order` (
     `appointment_time` DATETIME    DEFAULT NULL COMMENT '预约上门时间',
     `image_urls`      TEXT         COMMENT '照片URL列表(逗号分隔)',
     `worker_id`       BIGINT       DEFAULT NULL COMMENT '接单师傅ID',
+    `assign_score`    DECIMAL(5,2) DEFAULT NULL COMMENT '派单匹配得分',
+    `assign_reason`   VARCHAR(255) DEFAULT NULL COMMENT '派单决策理由',
     `status`          VARCHAR(20)  NOT NULL DEFAULT 'SUBMITTED' COMMENT '状态: SUBMITTED/ASSIGNED/ON_THE_WAY/PROCESSING/PENDING_ACCEPT/COMPLETED/CANCELLED/RESCHEDULED',
     `result`          TEXT         COMMENT '维修结论',
     `create_time`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
