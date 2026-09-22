@@ -47,7 +47,7 @@ Campus-Repair-Assistant/
 │   ├── api/           # API 接口文档
 │   ├── 索引.md        # 文档目录与提交清单
 │   ├── 需求分析.md    # 系统功能分析说明书
-│   ├── 数据项设计.md  # 核心数据项定义（9 张业务表）
+│   ├── 数据项设计.md  # 核心数据项定义（15 张业务表）
 │   ├── 技术难点分析.md# 技术难点与方案
 │   ├── 接口设计.md    # 系统接口设计文档
 │   ├── 详细设计.md    # 系统详细设计
@@ -79,6 +79,8 @@ npm run dev
 cd backend
 mvn spring-boot:run
 ```
+
+> 数据库凭据本地默认 `root/123456`（仅本地开发用）。正式/演示环境请用环境变量覆盖：`DB_USERNAME` / `DB_PASSWORD`（即 `SPRING_DATASOURCE_USERNAME/PASSWORD`），或写入被 `.gitignore` 排除的 `application-local.yml`。Docker 部署时在根目录建 `.env` 设 `MYSQL_ROOT_PASSWORD` 即可统一覆盖 MySQL 与后端。
 
 ## 开发规范
 
