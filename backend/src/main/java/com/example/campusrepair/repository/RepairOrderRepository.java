@@ -17,7 +17,19 @@ import java.util.List;
 @Repository
 public interface RepairOrderRepository extends JpaRepository<RepairOrder, Long> {
 
+    /**
+     * 按学生ID查询其报修工单
+     *
+     * @param studentId 学生ID
+     * @return 工单列表
+     */
     List<RepairOrder> findByStudentId(Long studentId);
 
+    /**
+     * 按状态查询报修工单
+     *
+     * @param status 工单状态
+     * @return 工单列表
+     */
     List<RepairOrder> findByStatus(String status);
 }
