@@ -17,17 +17,17 @@ public class RepairOrderServiceImpl implements RepairOrderService {
 
     @Override
     public RepairOrder createOrder(RepairOrder order) {
-        order.setCreateTime(LocalDateTime.now());
-        order.setUpdateTime(LocalDateTime.now());
+        order.setGmtCreate(LocalDateTime.now());
+        order.setGmtModified(LocalDateTime.now());
         if (order.getStatus() == null) {
-            order.setStatus("PENDING");
+            order.setStatus("SUBMITTED");
         }
         return repairOrderRepository.save(order);
     }
 
     @Override
     public RepairOrder updateOrder(RepairOrder order) {
-        order.setUpdateTime(LocalDateTime.now());
+        order.setGmtModified(LocalDateTime.now());
         return repairOrderRepository.save(order);
     }
 

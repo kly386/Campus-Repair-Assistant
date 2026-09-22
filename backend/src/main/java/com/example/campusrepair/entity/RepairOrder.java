@@ -29,8 +29,8 @@ public class RepairOrder {
     @Column(name = "ai_parsed_info", columnDefinition = "TEXT")
     private String aiParsedInfo;
 
-    @Column(name = "ai_confidence")
-    private Double aiConfidence;
+    @Column(name = "ai_confidence", columnDefinition = "DECIMAL(4,3)")
+    private BigDecimal aiConfidence;
 
     @Column(name = "category_id")
     private Long categoryId;
@@ -50,9 +50,6 @@ public class RepairOrder {
     @Column(name = "appointment_time")
     private LocalDateTime appointmentTime;
 
-    @Column(name = "image_urls", columnDefinition = "TEXT")
-    private String imageUrls;
-
     @Column(name = "worker_id")
     private Long workerId;
 
@@ -69,13 +66,16 @@ public class RepairOrder {
     private String result;
 
     @Column(name = "version")
-    private Long version;
+    private Integer version;
 
-    @Column(name = "create_time")
-    private LocalDateTime createTime;
+    @Column(name = "is_deleted")
+    private Boolean isDeleted = false;
 
-    @Column(name = "update_time")
-    private LocalDateTime updateTime;
+    @Column(name = "gmt_create")
+    private LocalDateTime gmtCreate;
+
+    @Column(name = "gmt_modified")
+    private LocalDateTime gmtModified;
 
     @Column(name = "finish_time")
     private LocalDateTime finishTime;
