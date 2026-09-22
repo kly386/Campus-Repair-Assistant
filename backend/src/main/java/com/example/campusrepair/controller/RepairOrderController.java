@@ -7,6 +7,14 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * 报修工单 REST 接口
+ *
+ * @Description 报修工单的增删改查接口
+ * @Author 开璐瑶
+ * @Date 2026-09-22
+ * @Version 1.0
+ */
 @RestController
 @RequestMapping("/api/orders")
 @RequiredArgsConstructor

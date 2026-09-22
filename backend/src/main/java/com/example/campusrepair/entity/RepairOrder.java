@@ -5,6 +5,14 @@ import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * 报修工单实体
+ *
+ * @Description 报修工单数据实体，对应 repair_order 表（数据项设计 v1.4）
+ * @Author 开璐瑶
+ * @Date 2026-09-22
+ * @Version 1.0
+ */
 @Entity
 @Table(name = "repair_order")
 @Data

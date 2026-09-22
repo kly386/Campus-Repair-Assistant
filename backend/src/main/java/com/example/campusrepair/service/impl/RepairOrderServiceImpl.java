@@ -9,6 +9,14 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * 报修工单服务实现
+ *
+ * @Description 报修工单业务逻辑实现，负责状态、时间的初始化维护
+ * @Author 开璐瑶
+ * @Date 2026-09-22
+ * @Version 1.0
+ */
 @Service
 @RequiredArgsConstructor
 public class RepairOrderServiceImpl implements RepairOrderService {

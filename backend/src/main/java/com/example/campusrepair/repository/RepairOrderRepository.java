@@ -6,6 +6,14 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
+/**
+ * 报修工单数据访问仓库
+ *
+ * @Description 报修工单 JPA 数据访问层
+ * @Author 开璐瑶
+ * @Date 2026-09-22
+ * @Version 1.0
+ */
 @Repository
 public interface RepairOrderRepository extends JpaRepository<RepairOrder, Long> {
 
