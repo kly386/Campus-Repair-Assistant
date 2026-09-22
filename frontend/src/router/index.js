@@ -1,5 +1,5 @@
-import { createRouter, createWebHistory } from 'vue-router'
-import Layout from '../views/Layout.vue'
+import { createRouter, createWebHistory } from 'vue-router';
+import Layout from '../views/Layout.vue';
 
 const routes = [
   {
@@ -14,9 +14,9 @@ const routes = [
       { path: 'dashboard', name: 'Dashboard', component: () => import('../views/Dashboard.vue') }
     ]
   }
-]
+];
 
 export default createRouter({
   history: createWebHistory(),
   routes
-})
+});
