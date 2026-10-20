@@ -1,0 +1,16 @@
+# Campus Repair Assistant — MySQL 8 集群配置
+# 目标位置：/etc/mysql/mysql.conf.d/campus.cnf
+# 重启生效：sudo systemctl restart mysql
+# 验证监听：sudo ss -lntp | grep 3306
+
+[mysqld]
+# 只监听 Host-Only 地址，不暴露到 NAT/公网
+bind-address = 192.168.56.101
+mysqlx-bind-address = 127.0.0.1
+
+default-time-zone = '+08:00'
+character-set-server = utf8mb4
+collation-server = utf8mb4_0900_ai_ci
+
+max_connections = 200
+innodb_buffer_pool_size = 512M

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Tomcat 11 集群节点配置模板（Campus Repair Assistant）
+  目标位置：/opt/tomcat/conf/server.xml
+  节点差异：VM2 使用 jvmRoute="tomcat1"，VM3 改为 jvmRoute="tomcat2"。
+  说明：本项目采用 JWT 无状态认证，Nginx 直接轮询，不需要 Tomcat 会话复制，
+        因此不配置 <Cluster>；jvmRoute 仅用于日志与后续扩展。
+-->
+<Server port="8005" shutdown="SHUTDOWN" address="127.0.0.1">
+
+  <Listener className="org.apache.catalina.startup.VersionLoggerListener" />
+  <Listener className="org.apache.catalina.core.JreMemoryLeakPreventionListener" />
+  <Listener className="org.apache.catalina.mbeans.GlobalResourcesLifecycleListener" />
+  <Listener className="org.apache.catalina.core.ThreadLocalLeakPreventionListener" />
+
+  <GlobalNamingResources>
+    <Resource name="UserDatabase" auth="Container"
+              type="org.apache.catalina.UserDatabase"
+              description="User database that can be updated and saved"
+              factory="org.apache.catalina.users.MemoryUserDatabaseFactory"
+              pathname="conf/tomcat-users.xml" />
+  </GlobalNamingResources>
+
+  <Service name="Catalina">
+
+    <!-- HTTP Connector：外部只经 Nginx 访问，不启用 AJP -->
+    <Connector port="8080"
+               address="0.0.0.0"
+               protocol="org.apache.coyote.http11.Http11NioProtocol"
+               connectionTimeout="20000"
+               keepAliveTimeout="20000"
+               maxKeepAliveRequests="200"
+               maxThreads="100"
+               minSpareThreads="20"
+               maxConnections="8192"
+               acceptCount="100"
+               URIEncoding="UTF-8"
+               maxHttpHeaderSize="8192"
+               maxPostSize="52428800"
+               maxSwallowSize="52428800"
+               compression="on"
+               compressionMinSize="2048"
+               compressibleMimeType="text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json,application/xml,image/svg+xml"
+               server="CampusRepair-Tomcat"
+               redirectPort="8443" />
+
+    <!-- VM3 部署时把 jvmRoute 改为 tomcat2 -->
+    <Engine name="Catalina" defaultHost="localhost" jvmRoute="tomcat1">
+
+      <Realm className="org.apache.catalina.realm.LockOutRealm">
+        <Realm className="org.apache.catalina.realm.UserDatabaseRealm"
+               resourceName="UserDatabase" />
+      </Realm>
+
+      <Host name="localhost" appBase="webapps"
+            unpackWARs="true" autoDeploy="true" deployOnStartup="true">
+
+        <!-- 访问日志：包含耗时、真实客户端 IP，便于验证轮询 -->
+        <Valve className="org.apache.catalina.valves.AccessLogValve"
+               directory="/var/log/tomcat11"
+               prefix="localhost_access_log"
+               suffix=".txt"
+               pattern="%h %l %u %t &quot;%r&quot; %s %b %D %{X-Forwarded-For}i %{X-Real-IP}i" />
+
+        <!-- 隐藏错误页中的 Tomcat 版本信息 -->
+        <Valve className="org.apache.catalina.valves.ErrorReportValve"
+               showReport="false" showServerInfo="false" />
+      </Host>
+    </Engine>
+  </Service>
+</Server>

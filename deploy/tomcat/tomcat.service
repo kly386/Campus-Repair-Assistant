@@ -1,0 +1,29 @@
+# Tomcat 11 systemd 服务单元
+# 目标位置：/etc/systemd/system/tomcat.service
+# 启用：sudo systemctl daemon-reload && sudo systemctl enable --now tomcat
+
+[Unit]
+Description=Apache Tomcat 11 (Campus Repair Assistant)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+User=tomcat
+Group=tomcat
+WorkingDirectory=/opt/tomcat
+Environment="CATALINA_HOME=/opt/tomcat"
+Environment="CATALINA_BASE=/opt/tomcat"
+Environment="CATALINA_PID=/opt/tomcat/temp/tomcat.pid"
+PIDFile=/opt/tomcat/temp/tomcat.pid
+ExecStart=/opt/tomcat/bin/startup.sh
+ExecStop=/opt/tomcat/bin/shutdown.sh 20 -force
+TimeoutStopSec=60
+Restart=on-failure
+RestartSec=10
+SuccessExitStatus=143
+UMask=0007
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
