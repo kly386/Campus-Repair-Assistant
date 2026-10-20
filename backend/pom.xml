@@ -11,6 +11,7 @@
 	<groupId>com.example</groupId>
 	<artifactId>backend</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
+	<packaging>war</packaging>
 	<name>backend</name>
 	<description/>
 	<url/>
@@ -43,6 +44,16 @@
 			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
 
+		<!-- 部署到外部 Tomcat 11 时，内嵌 Tomcat 由容器提供。
+		     直接声明 provided 以覆盖 starter-webmvc 的 compile 传递依赖；
+		     Spring Boot Maven Plugin 会把它放入 WAR 的 WEB-INF/lib-provided，
+		     因此同一个 WAR 仍可通过 java -jar 独立运行。 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-tomcat</artifactId>
+			<scope>provided</scope>
+		</dependency>
+
 		<dependency>
 			<groupId>com.mysql</groupId>
 			<artifactId>mysql-connector-j</artifactId>
@@ -71,6 +82,8 @@
 	</dependencies>
 
 	<build>
+		<!-- 固定 WAR 名称：部署到 Tomcat 后即根上下文，/api/** 路径保持不变 -->
+		<finalName>ROOT</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>

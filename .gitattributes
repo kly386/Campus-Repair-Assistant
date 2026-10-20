@@ -1,0 +1,5 @@
+# 部署模板中的 shell/systemd 文件必须在 Linux 上保持 LF，
+# 避免从 Windows 检出后出现 $'\r': command not found。
+deploy/**/*.sh text eol=lf
+deploy/**/*.service text eol=lf
+*.sh text eol=lf

@@ -35,6 +35,8 @@
 | Element Plus | 2.8.4 |
 | ECharts | 5.5.1 |
 | MySQL | 8.x |
+| Tomcat | 11.0.x（集群部署） |
+| Nginx | 1.24.x（集群部署） |
 
 ## 项目结构
 
@@ -42,6 +44,7 @@
 Campus-Repair-Assistant/
 ├── frontend/          # Vue3 前端（学生端 + 师傅端 + 管理看板）
 ├── backend/           # Spring Boot 后端（分层：controller/service/repository/entity/dto/config）
+├── deploy/            # Tomcat / Nginx / MySQL 集群配置模板
 ├── docs/              # 课程设计文档
 │   ├── sql/           # 数据库脚本（init.sql）
 │   ├── api/           # API 接口文档
@@ -52,6 +55,7 @@ Campus-Repair-Assistant/
 │   ├── 接口设计.md    # 系统接口设计文档
 │   ├── 详细设计.md    # 系统详细设计
 │   ├── 部署文档.md    # 系统安装部署文档（含Docker）
+│   ├── Tomcat集群部署文档.md # Nginx + 双 Tomcat 11 + MySQL 集群部署
 │   ├── 操作手册.md    # 系统操作说明书
 │   └── 开发规范.md    # 小组开发规范
 └── README.md
@@ -81,6 +85,10 @@ mvn spring-boot:run
 ```
 
 > 数据库凭据本地默认 `root/123456`（仅本地开发用）。正式/演示环境请用环境变量覆盖：`DB_USERNAME` / `DB_PASSWORD`（即 `SPRING_DATASOURCE_USERNAME/PASSWORD`），或写入被 `.gitignore` 排除的 `application-local.yml`。Docker 部署时在根目录建 `.env` 设 `MYSQL_ROOT_PASSWORD` 即可统一覆盖 MySQL 与后端。
+
+### Tomcat 集群部署
+
+后端已支持 WAR 打包（`mvn clean package` 产出 `target/ROOT.war`），可部署到外部 Tomcat 11。三虚拟机集群方案（Nginx + 双 Tomcat + MySQL）的虚拟机准备、Tomcat 参数、配置模板与验证步骤见 [docs/Tomcat集群部署文档.md](docs/Tomcat集群部署文档.md)。
 
 ## 开发规范
 
