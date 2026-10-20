@@ -22,9 +22,12 @@ export CATALINA_OPTS="$CATALINA_OPTS \
 
 # Spring Boot 生产配置（application-prod.properties）
 export SPRING_PROFILES_ACTIVE=prod
+# 主库（写 + 默认访问）
 export DB_HOST=192.168.56.101
 export DB_PORT=3306
 export DB_USERNAME=campus
 export DB_PASSWORD='ChangeMe_123'
+# 从库（读写分离）：从库未就绪时可置为空串，读操作自动回落主库
+export DB_SLAVE_HOST=192.168.56.104
 export UPLOAD_DIR=/opt/campus-repair/uploads
 export CORS_ALLOWED_ORIGINS=http://192.168.56.101
