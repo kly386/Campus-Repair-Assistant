@@ -1,5 +1,6 @@
 package com.example.campusrepair.service.impl;
 
+import com.example.campusrepair.datasource.Slave;
 import com.example.campusrepair.entity.RepairOrder;
 import com.example.campusrepair.repository.RepairOrderRepository;
 import com.example.campusrepair.service.RepairOrderService;
@@ -50,6 +51,7 @@ public class RepairOrderServiceImpl implements RepairOrderService {
     }
 
     @Override
+    @Slave
     public List<RepairOrder> findByStatus(String status) {
         return repairOrderRepository.findByStatus(status);
     }

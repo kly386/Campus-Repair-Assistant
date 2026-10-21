@@ -47,7 +47,7 @@ public interface RepairOrderService {
     List<RepairOrder> findByStudentId(Long studentId);
 
     /**
-     * 按状态查询工单
+     * 按状态查询工单（集群环境经 @Slave 路由到从库；存在主从延迟，写后立查请用 findById）
      *
      * @param status 工单状态
      * @return 工单列表

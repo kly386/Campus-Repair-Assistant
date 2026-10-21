@@ -1,0 +1,81 @@
+# Campus Repair Assistant — MySQL 读写分离（Docker 版）
+# 主库 master：宿主机 localhost:3306 → 应用写入
+# 从库 slave ：宿主机 localhost:3307 → 应用只读（@Slave 路由）
+# 用法：在本目录执行
+#   docker compose up -d
+#   docker compose ps          # 等两个容器 healthy
+# 建立复制见 docs/MySQL读写分离部署文档.md 第 5 章
+
+name: campus-repair-rw
+
+services:
+  mysql-master:
+    image: mysql:8.4
+    container_name: mysql-master
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-ChangeMe_123}
+      MYSQL_DATABASE: campus_repair
+      # 时区与集群保持一致
+      TZ: Asia/Shanghai
+    command:
+      - --server-id=1
+      - --log-bin=mysql-bin
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+08:00
+      - --max_connections=200
+    volumes:
+      - master-data:/var/lib/mysql
+      # 入口脚本按字母序执行：01 建账号（应用账号 + 复制账号），02 导入 15 张表
+      - ./master/01-users.sql:/docker-entrypoint-initdb.d/01-users.sql:ro
+      - ../../docs/sql/init.sql:/docker-entrypoint-initdb.d/02-init.sql:ro
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${MYSQL_ROOT_PASSWORD:-ChangeMe_123}" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mysql-slave:
+    image: mysql:8.4
+    container_name: mysql-slave
+    restart: unless-stopped
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-ChangeMe_123}
+      MYSQL_DATABASE: campus_repair
+      TZ: Asia/Shanghai
+    command:
+      - --server-id=2
+      - --relay-log=mysql-relay
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+      # 只读从库：read_only 不拦 root（初始化建账号靠它），普通应用账号被拦。
+      # super_read_only 连 root 也拦，首次初始化会导致起不来，
+      # 复制建立后由人工 SET PERSIST super_read_only=ON 开启（见部署文档第 5 章）
+      - --read-only=ON
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+08:00
+      - --max_connections=200
+    volumes:
+      - slave-data:/var/lib/mysql
+      # 应用账号不随业务库复制，从库要单独建（与主库同名同密码）
+      - ./slave/01-users.sql:/docker-entrypoint-initdb.d/01-users.sql:ro
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${MYSQL_ROOT_PASSWORD:-ChangeMe_123}" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  master-data:
+  slave-data:
