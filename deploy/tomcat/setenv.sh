@@ -27,7 +27,8 @@ export DB_HOST=192.168.56.101
 export DB_PORT=3306
 export DB_USERNAME=campus
 export DB_PASSWORD='ChangeMe_123'
-# 从库（读写分离）：从库未就绪时可置为空串，读操作自动回落主库
-export DB_SLAVE_HOST=192.168.56.104
+# 从库（读写分离）：本机 Docker 从库；未就绪时可置为空串，读操作自动回落主库
+export DB_SLAVE_HOST=localhost
+export DB_SLAVE_PORT=3307
 export UPLOAD_DIR=/opt/campus-repair/uploads
 export CORS_ALLOWED_ORIGINS=http://192.168.56.101

@@ -76,7 +76,7 @@ public class RepairOrder {
     @Column(name = "version")
     private Integer version;
 
-    @Column(name = "is_deleted")
+    @Column(name = "is_deleted", columnDefinition = "TINYINT UNSIGNED")
     private Boolean isDeleted = false;
 
     @Column(name = "gmt_create")

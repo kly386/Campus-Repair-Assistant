@@ -11,7 +11,9 @@
 | VM1 | 192.168.56.101 | Nginx + MySQL 8（主库） | 统一入口与数据库，`server-id=1` |
 | VM2 | 192.168.56.102 | Tomcat 11 | `jvmRoute=tomcat1` |
 | VM3 | 192.168.56.103 | Tomcat 11 | `jvmRoute=tomcat2` |
-| VM4 | 192.168.56.104 | MySQL 8（从库） | 读写分离只读副本，`server-id=2`（仅读写分离方案需要） |
+
+> 读写分离的**从库不再使用虚拟机**，改由本机 Docker 起两个 MySQL 8.4 容器实现（主库 3306 / 从库 3307），
+> 编排文件见 `docker/docker-compose.yml`，完整步骤见 [docs/MySQL读写分离部署文档.md](../docs/MySQL读写分离部署文档.md)。
 
 ## 文件说明
 
@@ -23,26 +25,29 @@
 | `tomcat/logrotate.d/tomcat` | `/etc/logrotate.d/tomcat` | catalina.out 日志轮转 |
 | `nginx/campus-repair.conf` | `/etc/nginx/conf.d/campus-repair.conf` | 静态站点 + `/api` 双节点轮询 |
 | `mysql/mysqld-campus.cnf` | `/etc/mysql/mysql.conf.d/campus.cnf`（VM1） | MySQL 主库配置（监听地址、GTID、binlog） |
-| `mysql/mysqld-campus-slave.cnf` | `/etc/mysql/mysql.conf.d/campus.cnf`（VM4） | MySQL 从库配置（GTID、relay-log、只读） |
 | `mysql/init-user.sql` | 在 VM1 上用 root 执行 | 建库、创建最小权限应用账号 |
-| `mysql/init-repl.sql` | 在 VM1 上用 root 执行 | 创建复制专用最小权限账号（读写分离） |
+| `docker/docker-compose.yml` | 本机执行 `docker compose up -d` | 读写分离：MySQL 主从双容器编排（主 3306 / 从 3307） |
+| `docker/master/01-users.sql` | 主库容器初始化脚本 | 建应用账号 `campus` 与复制账号 `repl` |
+| `docker/slave/01-users.sql` | 从库容器初始化脚本 | 单独建应用账号 `campus`（用户表不随业务库复制） |
+| `mysql/mysqld-campus-slave.cnf` | —（历史文件） | 早期虚拟机从库方案遗留，当前未使用 |
+| `mysql/init-repl.sql` | —（历史文件） | 早期虚拟机复制账号脚本遗留，当前未使用 |
 
 ## 使用前必须替换的占位符
 
 | 占位符 | 出现位置 | 说明 |
 |--------|----------|------|
-| `ChangeMe_123` | `setenv.sh`、`application-prod.properties`、`init-user.sql` | 数据库应用账号密码，三处保持一致；从库 4.3 步骤同样使用 |
-| `ChangeMe_Repl_123` | `init-repl.sql`、部署文档的 `CHANGE REPLICATION SOURCE` | 复制账号密码，两处保持一致 |
+| `ChangeMe_123` | `setenv.sh`、`application-prod.properties`、`init-user.sql`、`docker/*/01-users.sql` | 数据库应用账号密码，各处保持一致 |
+| `ChangeMe_Repl_123` | `docker/master/01-users.sql`、部署文档的 `CHANGE REPLICATION SOURCE` | 复制账号密码，两处保持一致 |
 | `192.168.56.101/102/103/104` | 所有配置 | 按实际 Host-Only 网段修改 |
 | `jvmRoute="tomcat1"` | `server.xml` | VM3 改为 `tomcat2` |
 | `JAVA_HOME` | `setenv.sh` | 以 `readlink -f "$(which java)"` 的实际路径为准 |
 
 ## 使用顺序
 
-1. 四台 VM 完成系统、网络、JDK 25 准备（VM4 仅需系统与网络）。
+1. 三台 VM 完成系统、网络、JDK 25 准备。
 2. VM1：MySQL → 导入 `docs/sql/init.sql` → Nginx。
 3. VM2/VM3：Tomcat 11 → 部署 `ROOT.war`。
-4. VM4：MySQL 从库 → 建立主从复制 → Tomcat 重新发布带读写分离的 WAR（见读写分离部署文档）。
+4. 读本机 Docker：`docker compose up -d` 起 MySQL 主从 → 建立复制 → 应用以 prod 配置指向主/从端口（见读写分离部署文档）。
 5. 按两份部署文档的验证矩阵逐项检查。
 
 > 模板中的 IP、密码和路径是演示值，复制到服务器后请先 `diff` 再合并，不要直接覆盖现有生产配置。

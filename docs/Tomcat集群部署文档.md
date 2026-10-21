@@ -206,7 +206,7 @@ sudo ufw status verbose
 
 ## 5. VM1：MySQL 8 安装与初始化
 
-> 本章为单库部署。如课程要求数据库**读写分离**，在完成本章后继续按 [MySQL读写分离部署文档.md](./MySQL读写分离部署文档.md) 增加从库（VM4）；本章使用的 `mysqld-campus.cnf` 已包含 GTID/binlog 主库参数，无需改动。
+> 本章为单库部署。如课程要求数据库**读写分离**，在完成本章后继续按 [MySQL读写分离部署文档.md](./MySQL读写分离部署文档.md) 用本机 Docker 起主从双容器并配置应用路由；本章使用的 `mysqld-campus.cnf` 已包含 GTID/binlog 主库参数，无需改动。
 
 ### 5.1 安装与配置
 

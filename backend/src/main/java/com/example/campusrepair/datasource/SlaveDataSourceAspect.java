@@ -30,8 +30,8 @@ public class SlaveDataSourceAspect {
      * @return 目标方法返回值
      * @throws Throwable 目标方法异常
      */
-    @Around("@annotation(slave)")
-    public Object routeToSlave(ProceedingJoinPoint joinPoint, Slave slave) throws Throwable {
+    @Around("@annotation(com.example.campusrepair.datasource.Slave)")
+    public Object routeToSlave(ProceedingJoinPoint joinPoint) throws Throwable {
         DynamicDataSourceContextHolder.useSlave();
         try {
             return joinPoint.proceed();
