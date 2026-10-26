@@ -15,10 +15,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 系统信息接口
+ * 系统信息接口（运维 / 健康检查端点）
  *
- * @Description 集群部署演示与排障用：返回当前处理请求的节点主机名、端口，
- *              以及主/从数据库实例信息（验证读写分离）
+ * @Description 集群发布验证与排障用：返回当前处理请求的节点主机名、端口，
+ *              以及主/从数据库实例信息（验证读写分离路由）
  * @Author 闵娟
  * @Date 2026-10-20
  * @Version 1.0
@@ -30,7 +30,7 @@ public class SystemController {
 
     private final DatabaseProbeService databaseProbeService;
 
-    /** 读写分离开关，仅用于演示接口回显 */
+    /** 读写分离开关，用于运维回显 */
     @Value("${app.datasource.routing-enabled:false}")
     private boolean routingEnabled;
 

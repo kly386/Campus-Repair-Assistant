@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Campus Repair Assistant — Tomcat 11 集群实例 1 配置模板
+  目标位置：<实例目录>\conf\server.xml（由 setup-cluster.ps1 自动放置）
+
+  端口规划（与实例 2 的全部端口逐位错开，这是同机多实例的前提）：
+    HTTP Connector   8080  （仅绑定 127.0.0.1，外部统一经 Nginx :80 进入）
+    Shutdown Command 8005  （仅绑定 127.0.0.1，实例 2 必须用别的端口）
+    jvmRoute         tomcat1
+-->
+<Server port="8005" shutdown="SHUTDOWN" address="127.0.0.1">
+
+  <Listener className="org.apache.catalina.startup.VersionLoggerListener" />
+  <Listener className="org.apache.catalina.core.JreMemoryLeakPreventionListener" />
+  <Listener className="org.apache.catalina.mbeans.GlobalResourcesLifecycleListener" />
+  <Listener className="org.apache.catalina.core.ThreadLocalLeakPreventionListener" />
+
+  <GlobalNamingResources>
+    <Resource name="UserDatabase" auth="Container"
+              type="org.apache.catalina.UserDatabase"
+              description="User database that can be updated and saved"
+              factory="org.apache.catalina.users.MemoryUserDatabaseFactory"
+              pathname="conf/tomcat-users.xml" />
+  </GlobalNamingResources>
+
+  <Service name="Catalina">
+
+    <!-- HTTP Connector：只服务本机 Nginx 反向代理，不启用 AJP -->
+    <Connector port="8080"
+               address="127.0.0.1"
+               protocol="org.apache.coyote.http11.Http11NioProtocol"
+               connectionTimeout="20000"
+               keepAliveTimeout="20000"
+               maxKeepAliveRequests="200"
+               maxThreads="100"
+               minSpareThreads="20"
+               maxConnections="8192"
+               acceptCount="100"
+               URIEncoding="UTF-8"
+               maxHttpHeaderSize="8192"
+               maxPostSize="52428800"
+               maxSwallowSize="52428800"
+               compression="on"
+               compressionMinSize="2048"
+               compressibleMimeType="text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json,application/xml,image/svg+xml"
+               server="CampusRepair-Tomcat"
+               redirectPort="8443" />
+
+    <Engine name="Catalina" defaultHost="localhost" jvmRoute="tomcat1">
+
+      <Realm className="org.apache.catalina.realm.LockOutRealm">
+        <Realm className="org.apache.catalina.realm.UserDatabaseRealm"
+               resourceName="UserDatabase" />
+      </Realm>
+
+      <Host name="localhost" appBase="webapps"
+            unpackWARs="true" autoDeploy="false" deployOnStartup="true">
+
+        <!-- 访问日志：含请求耗时(毫秒)与真实客户端 IP，排障与发布验证都用它 -->
+        <Valve className="org.apache.catalina.valves.AccessLogValve"
+               directory="logs"
+               prefix="access_node1_"
+               suffix=".txt"
+               pattern="%h %l %u %t &quot;%r&quot; %s %b %D %{X-Forwarded-For}i %{X-Real-IP}i" />
+
+        <!-- 隐藏错误页中的 Tomcat 版本信息，减少信息泄露 -->
+        <Valve className="org.apache.catalina.valves.ErrorReportValve"
+               showReport="false" showServerInfo="false" />
+      </Host>
+    </Engine>
+  </Service>
+</Server>

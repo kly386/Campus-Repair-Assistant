@@ -9,7 +9,9 @@
 
 前置条件：本机已安装 Docker Desktop（本仓库开发机为 `D:\Docker\Docker`，引擎 29.8.0）。
 
-> 选型说明：读写分离的数据库部分用 Docker 双容器实现，好处是不依赖虚拟机、可一键重建、演示时启动即用。虚拟机上的 Tomcat 集群部分见 [Tomcat集群部署文档.md](./Tomcat集群部署文档.md)，两者互不影响。
+> 选型说明：读写分离的数据库部分用 Docker 双容器实现，好处是不依赖虚拟机、可一键重建、演示时启动即用。
+> 应用层（Tomcat 集群）同样不使用虚拟机，见 [Tomcat集群部署文档.md](./Tomcat集群部署文档.md)；
+> 两者共用本机同一 Docker 环境，互不影响（共存细节见第 10 章）。
 
 ---
 
@@ -318,13 +320,17 @@ java -jar target/ROOT.war
 
 | 项 | 值 | 出现位置 |
 |----|----|----------|
-| 主库端口 | 3306 | `docker-compose.yml`、应用 `DB_PORT` |
-| 从库端口 | 3307 | `docker-compose.yml`、应用 `DB_SLAVE_PORT` |
+| 主库端口 | 3306（宿主机绑定 `127.0.0.1`） | `docker-compose.yml`、应用 `DB_PORT` |
+| 从库端口 | 3307（宿主机绑定 `127.0.0.1`） | `docker-compose.yml`、应用 `DB_SLAVE_PORT` |
 | root 密码 | `ChangeMe_123`（演示值，可用 `MYSQL_ROOT_PASSWORD` 覆盖） | `docker-compose.yml` |
 | 应用账号 | `campus` / `ChangeMe_123` | `deploy/docker/*/01-users.sql`、`application-prod.properties` |
 | 复制账号 | `repl` / `ChangeMe_Repl_123` | `deploy/docker/master/01-users.sql`、`CHANGE REPLICATION SOURCE` |
 
 > 以上均为演示占位密码，正式环境请通过环境变量注入真实口令，不要写进仓库。
+>
+> ⚠️ **端口必须绑 `127.0.0.1`**：Docker Desktop 自带"入站任意端口允许"的防火墙规则，
+> 写成缺省的 `3306:3306` 会把端口发布到 `0.0.0.0`，任何网络（含公用 Wi-Fi）同网段的机器都能直连 MySQL。
+> 只在容器间相互访问的复制走 Compose 内部网络，绑回环无任何影响；详见《Tomcat集群部署文档》第 17 章。
 
 ---
 
@@ -332,10 +338,29 @@ java -jar target/ROOT.war
 
 若本机 3306 / 3307 已被别的程序占用，且不愿停掉它，可把容器端口改成 13306 / 13307：
 
-1. 修改 `deploy/docker/docker-compose.yml`：
-   - 主库 `ports: - "13306:3306"`
-   - 从库 `ports: - "13307:3306"`
+1. 修改 `deploy/docker/docker-compose.yml`（保留 `127.0.0.1:` 前缀，只换宿主机端口）：
+   - 主库 `ports: - "127.0.0.1:13306:3306"`
+   - 从库 `ports: - "127.0.0.1:13307:3306"`
 2. 重启：`docker compose down && docker compose up -d`。
 3. 应用启动参数改为 `DB_PORT=13306`、`DB_SLAVE_PORT=13307`。
 
 从库与主库同在 Compose 网络内，复制仍按服务名 `mysql-master:3306` 连接，不受宿主机映射端口影响。
+
+---
+
+## 10. 与 Tomcat 集群共存
+
+读写分离方案与 [Tomcat集群部署文档.md](./Tomcat集群部署文档.md) 的双实例集群共用本机同一套 Docker 数据库，无需任何改动即可共存：
+
+1. **数据库完全共享**：集群的两个 Tomcat 实例 `setenv.bat` 中注入与本文一致的环境变量
+   （`DB_HOST=localhost:3306` 主库、`DB_SLAVE_HOST=localhost:3307` 从库、同一 `campus` 账号），
+   每个实例都执行相同的路由规则，`/api/system/db` 在任一实例上返回相同结果。
+2. **`ddl-auto` 只有一处**：`application-prod.properties` 的 `validate` 对所有外部 Tomcat 部署生效；
+   日常开发（基础 `application.properties`）的 `update` 不会与集群冲突——但不要两者同时连同一个库跑 `update`。
+3. **启动顺序**：先 `docker compose up -d`（数据库就绪），再启动 Tomcat 实例；概念上“数据库先活，应用后活”。
+4. **端口互不占用**：本文占用 3306/3307（容器映射），集群实例占用 8080/8081 与 Shutdown 8005/8006，
+   Nginx 占用 80，均是互不重叠的端口分配。
+5. **唯一冲突**：开发模式 `java -jar ROOT.war`（或 IDE 运行）默认占用 8080，与集群实例 1 相同，
+   **起集群前必须停掉该进程**（IDE Stop、或 `jps -l | findstr campusrepair` 后 `taskkill /PID <pid> /F`）。
+6. **从库故障演练可以叠加集群视角**：`docker stop mysql-slave` 后，经 Nginx 访问 `@Slave` 读接口，无论轮询命中
+   实例 1 还是实例 2 都会读到主库回落或报错——这正好验证“每实例独立数据源路由”的隔离性。

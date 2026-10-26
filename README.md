@@ -88,7 +88,7 @@ mvn spring-boot:run
 
 ### Tomcat 集群部署
 
-后端已支持 WAR 打包（`mvn clean package` 产出 `target/ROOT.war`），可部署到外部 Tomcat 11。三虚拟机集群方案（Nginx + 双 Tomcat + MySQL）的虚拟机准备、Tomcat 参数、配置模板与验证步骤见 [docs/Tomcat集群部署文档.md](docs/Tomcat集群部署文档.md)。
+后端已支持 WAR 打包（`mvn clean package` 产出 `target/ROOT.war`），可部署到外部 Tomcat 11。本机双 Tomcat 集群方案（Nginx + 双端口 8080/8081 + Docker MySQL 主从，零虚拟机）的实例规划、Tomcat 参数、一键安装、滚动更新发布与运维检查见 [docs/Tomcat集群部署文档.md](docs/Tomcat集群部署文档.md)。
 
 ## 开发规范
 

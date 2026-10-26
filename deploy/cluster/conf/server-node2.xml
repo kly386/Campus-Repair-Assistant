@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Tomcat 11 集群节点配置模板（Campus Repair Assistant）
-  目标位置：/opt/tomcat/conf/server.xml
-  节点差异：VM2 使用 jvmRoute="tomcat1"，VM3 改为 jvmRoute="tomcat2"。
-  说明：本项目采用 JWT 无状态认证，Nginx 直接轮询，不需要 Tomcat 会话复制，
-        因此不配置 <Cluster>；jvmRoute 仅用于日志与后续扩展。
+  Campus Repair Assistant — Tomcat 11 集群实例 2 配置模板
+  目标位置：<实例目录>\conf\server.xml（由 setup-cluster.ps1 自动放置）
+
+  端口规划（与实例 1 的全部端口逐位错开，这是同机多实例的前提）：
+    HTTP Connector   8081  （仅绑定 127.0.0.1，外部统一经 Nginx :80 进入）
+    Shutdown Command 8006  （仅绑定 127.0.0.1，与实例 1 的 8005 错开）
+    jvmRoute         tomcat2
 -->
-<Server port="8005" shutdown="SHUTDOWN" address="127.0.0.1">
+<Server port="8006" shutdown="SHUTDOWN" address="127.0.0.1">
 
   <Listener className="org.apache.catalina.startup.VersionLoggerListener" />
   <Listener className="org.apache.catalina.core.JreMemoryLeakPreventionListener" />
@@ -23,9 +25,9 @@
 
   <Service name="Catalina">
 
-    <!-- HTTP Connector：外部只经 Nginx 访问，不启用 AJP -->
-    <Connector port="8080"
-               address="0.0.0.0"
+    <!-- HTTP Connector：只服务本机 Nginx 反向代理，不启用 AJP -->
+    <Connector port="8081"
+               address="127.0.0.1"
                protocol="org.apache.coyote.http11.Http11NioProtocol"
                connectionTimeout="20000"
                keepAliveTimeout="20000"
@@ -44,8 +46,7 @@
                server="CampusRepair-Tomcat"
                redirectPort="8443" />
 
-    <!-- VM3 部署时把 jvmRoute 改为 tomcat2 -->
-    <Engine name="Catalina" defaultHost="localhost" jvmRoute="tomcat1">
+    <Engine name="Catalina" defaultHost="localhost" jvmRoute="tomcat2">
 
       <Realm className="org.apache.catalina.realm.LockOutRealm">
         <Realm className="org.apache.catalina.realm.UserDatabaseRealm"
@@ -53,16 +54,16 @@
       </Realm>
 
       <Host name="localhost" appBase="webapps"
-            unpackWARs="true" autoDeploy="true" deployOnStartup="true">
+            unpackWARs="true" autoDeploy="false" deployOnStartup="true">
 
-        <!-- 访问日志：包含耗时、真实客户端 IP，便于验证轮询 -->
+        <!-- 访问日志：含请求耗时(毫秒)与真实客户端 IP，排障与发布验证都用它 -->
         <Valve className="org.apache.catalina.valves.AccessLogValve"
-               directory="/var/log/tomcat11"
-               prefix="localhost_access_log"
+               directory="logs"
+               prefix="access_node2_"
                suffix=".txt"
                pattern="%h %l %u %t &quot;%r&quot; %s %b %D %{X-Forwarded-For}i %{X-Real-IP}i" />
 
-        <!-- 隐藏错误页中的 Tomcat 版本信息 -->
+        <!-- 隐藏错误页中的 Tomcat 版本信息，减少信息泄露 -->
         <Valve className="org.apache.catalina.valves.ErrorReportValve"
                showReport="false" showServerInfo="false" />
       </Host>
