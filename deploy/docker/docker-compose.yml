@@ -1,6 +1,8 @@
 # Campus Repair Assistant — MySQL 读写分离（Docker 版）
-# 主库 master：宿主机 localhost:3306 → 应用写入
-# 从库 slave ：宿主机 localhost:3307 → 应用只读（@Slave 路由）
+# 主库 master：宿主机 127.0.0.1:3306 → 应用写入
+# 从库 slave ：宿主机 127.0.0.1:3307 → 应用只读（@Slave 路由）
+# 安全注意：宿主机端口必须绑定 127.0.0.1，不能发布到 0.0.0.0——
+#           否则 Docker Desktop 的入站放行规则会把 MySQL 暴露给整个局域网。
 # 用法：在本目录执行
 #   docker compose up -d
 #   docker compose ps          # 等两个容器 healthy
@@ -14,7 +16,7 @@ services:
     container_name: mysql-master
     restart: unless-stopped
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-ChangeMe_123}
       MYSQL_DATABASE: campus_repair
@@ -45,7 +47,7 @@ services:
     container_name: mysql-slave
     restart: unless-stopped
     ports:
-      - "3307:3306"
+      - "127.0.0.1:3307:3306"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-ChangeMe_123}
       MYSQL_DATABASE: campus_repair

@@ -3,3 +3,7 @@
 deploy/**/*.sh text eol=lf
 deploy/**/*.service text eol=lf
 *.sh text eol=lf
+
+# Windows 脚本必须保持 CRLF：任何在其它系统上改动都会破坏批处理执行
+*.bat text eol=crlf
+*.ps1 text eol=crlf
