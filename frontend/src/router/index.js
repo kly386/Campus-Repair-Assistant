@@ -11,7 +11,8 @@ const routes = [
       { path: 'diagnosis', name: 'Diagnosis', component: () => import('../views/Diagnosis.vue') },
       { path: 'orders', name: 'Orders', component: () => import('../views/Orders.vue') },
       { path: 'schedule', name: 'Schedule', component: () => import('../views/Schedule.vue') },
-      { path: 'dashboard', name: 'Dashboard', component: () => import('../views/Dashboard.vue') }
+      { path: 'dashboard', name: 'Dashboard', component: () => import('../views/Dashboard.vue') },
+      { path: 'files', name: 'Files', component: () => import('../views/Files.vue') }
     ]
   }
 ];

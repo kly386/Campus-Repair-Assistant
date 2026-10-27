@@ -8,6 +8,7 @@
         <el-menu-item index="/orders">工单管理</el-menu-item>
         <el-menu-item index="/schedule">师傅排班</el-menu-item>
         <el-menu-item index="/dashboard">运营看板</el-menu-item>
+        <el-menu-item index="/files">文件管理</el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
