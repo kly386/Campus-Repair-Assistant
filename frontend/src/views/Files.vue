@@ -28,10 +28,13 @@
               <input ref="bigInput" type="file" @change="onBigPick" />
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" :loading="bigUploading" :disabled="!bigFile" @click="doChunkUpload">
-                分片上传（{{ chunkCount }} 片）
+              <el-button type="primary" :loading="bigUploading" :disabled="!bigFile"
+                         @click="doChunkUpload">
+                {{ bigUploadId ? `继续上传（从第 ${bigNextIndex} 片，共 ${chunkCount} 片）` : `分片上传（${chunkCount} 片）` }}
               </el-button>
+              <el-button v-if="bigUploading" type="warning" plain @click="pauseBigUpload">暂停</el-button>
               <span v-if="bigUploading" style="margin-left: 12px">正在上传第 {{ bigChunkIndex }}/{{ chunkCount }} 片</span>
+              <span v-else-if="bigUploadId" style="margin-left: 12px; color: #e6a23c">已暂停（断点：第 {{ bigNextIndex }} 片）</span>
             </el-form-item>
             <el-progress v-if="bigUploading || bigPercent > 0" :percentage="bigPercent" />
           </el-form>
@@ -111,6 +114,11 @@ const bigFile = ref(null);
 const bigUploading = ref(false);
 const bigChunkIndex = ref(0);
 const bigInput = ref(null);
+let bigPaused = false;            // 暂停标志：在分片间生效（分片级暂停）
+// 断点状态：uploadId 对应后端/OSS 的分片会话，nextIndex 是下一个待传分片下标。
+// 二者只要在进程内存活，重启上传即可从断点继续，已传分片全部跳过。
+const bigUploadId = ref(null);
+const bigNextIndex = ref(1);
 
 const chunkCount = computed(() =>
   bigFile.value ? Math.ceil(bigFile.value.size / CHUNK_SIZE) : 0);
@@ -120,26 +128,50 @@ const bigPercent = computed(() =>
 function onBigPick(e) {
   bigFile.value = e.target.files[0] || null;
   bigChunkIndex.value = 0;
+  bigUploadId.value = null; // 换了文件 → 旧断点作废，从头开始
+  bigNextIndex.value = 1;
+}
+
+function pauseBigUpload() {
+  bigPaused = true;
+  ElMessage.info('已暂停：当前片传完后停止，可点「继续上传」从断点续传');
 }
 
 async function doChunkUpload() {
   const file = bigFile.value;
+  if (!file) return;
+  bigPaused = false;
   bigUploading.value = true;
   try {
-    const { uploadId } = await initMultipart(file.name, orderId.value || null);
+    // 无 uploadId 说明是首次上传 → init；有 uploadId 说明是断点续传 → 跳过 init 直接传剩余分片
+    if (!bigUploadId.value) {
+      const { uploadId } = await initMultipart(file.name, orderId.value || null);
+      bigUploadId.value = uploadId;
+      bigNextIndex.value = 1;
+    }
     const total = Math.ceil(file.size / CHUNK_SIZE);
-    for (let i = 1; i <= total; i++) { // 分片从 1 开始编号；失败可从该片重试（断点续传）
+    let i = bigNextIndex.value;
+    for (; i <= total; i++) { // 分片从 1 开始编号；失败/暂停后可从该片重试（断点续传）
+      if (bigPaused) {
+        bigNextIndex.value = i; // 记录断点：下一片从 i 开始
+        ElMessage.warning(`已在第 ${i} 片前暂停，进度 ${(Math.round((i - 1) / total * 100))}%，可继续上传`);
+        return;
+      }
       bigChunkIndex.value = i;
       const start = (i - 1) * CHUNK_SIZE;
       const blob = file.slice(start, Math.min(start + CHUNK_SIZE, file.size));
-      await uploadChunk(uploadId, i, blob);
+      await uploadChunk(bigUploadId.value, i, blob);
+      bigNextIndex.value = i + 1;
     }
-    await completeMultipart(uploadId, orderId.value || null);
+    await completeMultipart(bigUploadId.value, orderId.value || null);
     ElMessage.success(`分片上传完成，共 ${total} 片，已通知 OSS 合并`);
     bigFile.value = null;
+    bigUploadId.value = null;
+    bigNextIndex.value = 1;
     if (bigInput.value) bigInput.value.value = '';
   } catch (e) {
-    ElMessage.error('分片上传失败：' + errText(e));
+    ElMessage.error('分片上传失败：' + errText(e) + '（已传分片保留在 OSS，修复网络可点继续上传）');
+    // 单片失败：不删除 uploadId 会话，保留断点，重试时只从失败片开始
   } finally {
     bigUploading.value = false;
   }
