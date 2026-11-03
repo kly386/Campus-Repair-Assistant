@@ -22,8 +22,11 @@
           </el-form>
         </el-card>
 
-        <el-card header="大文件分片上传（每片 5MB，逐片上传后台转发 OSS）" style="margin-top: 16px">
+        <el-card header="大文件分片上传（每片 5MB，逐片上传后台转发 MinIO）" style="margin-top: 16px">
           <el-form label-width="80px">
+            <el-form-item label="工单ID">
+              <el-input-number v-model="bigOrderId" :min="0" controls-position="right" />
+            </el-form-item>
             <el-form-item label="选择文件">
               <input ref="bigInput" type="file" @change="onBigPick" />
             </el-form-item>
@@ -114,8 +117,9 @@ const bigFile = ref(null);
 const bigUploading = ref(false);
 const bigChunkIndex = ref(0);
 const bigInput = ref(null);
+const bigOrderId = ref(null); // 大文件卡片自己的工单ID，不再借用隔壁小文件卡片的值
 let bigPaused = false;            // 暂停标志：在分片间生效（分片级暂停）
-// 断点状态：uploadId 对应后端/OSS 的分片会话，nextIndex 是下一个待传分片下标。
+// 断点状态：uploadId 对应后端/MinIO 的分片会话，nextIndex 是下一个待传分片下标。
 // 二者只要在进程内存活，重启上传即可从断点继续，已传分片全部跳过。
 const bigUploadId = ref(null);
 const bigNextIndex = ref(1);
@@ -145,7 +149,7 @@ async function doChunkUpload() {
   try {
     // 无 uploadId 说明是首次上传 → init；有 uploadId 说明是断点续传 → 跳过 init 直接传剩余分片
     if (!bigUploadId.value) {
-      const { uploadId } = await initMultipart(file.name, orderId.value || null);
+      const { uploadId } = await initMultipart(file.name, bigOrderId.value || null);
       bigUploadId.value = uploadId;
       bigNextIndex.value = 1;
     }
@@ -163,14 +167,14 @@ async function doChunkUpload() {
       await uploadChunk(bigUploadId.value, i, blob);
       bigNextIndex.value = i + 1;
     }
-    await completeMultipart(bigUploadId.value, orderId.value || null);
-    ElMessage.success(`分片上传完成，共 ${total} 片，已通知 OSS 合并`);
+    await completeMultipart(bigUploadId.value, bigOrderId.value || null);
+    ElMessage.success(`分片上传完成，共 ${total} 片，已通知 MinIO 合并`);
     bigFile.value = null;
     bigUploadId.value = null;
     bigNextIndex.value = 1;
     if (bigInput.value) bigInput.value.value = '';
   } catch (e) {
-    ElMessage.error('分片上传失败：' + errText(e) + '（已传分片保留在 OSS，修复网络可点继续上传）');
+    ElMessage.error('分片上传失败：' + errText(e) + '（已传分片保留在 MinIO，修复网络可点继续上传）');
     // 单片失败：不删除 uploadId 会话，保留断点，重试时只从失败片开始
   } finally {
     bigUploading.value = false;
