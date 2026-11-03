@@ -11,7 +11,7 @@ export function batchUpload(files, orderId) {
   const form = new FormData();
   files.forEach((f) => form.append('files', f));
   return http.post('/files/batch-upload', form, {
-    params: orderId == null ? {} : { orderId }
+    params: orderId === null ? {} : { orderId }
   }).then((r) => r.data);
 }
 
