@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const http = axios.create({ baseURL: '/api' });
+import http from './http';
 
 /**
  * 小文件批量上传：一次请求提交多个文件
