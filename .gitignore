@@ -26,6 +26,9 @@ application-local.yml
 # Docker Compose 本地环境变量（含数据库密钥，勿提交）
 .env
 
+# MinIO 社区版停服后的镜像封存包（59MB，仅组内云盘/微信分发，勿提交）
+deploy/docker/images/
+
 # Tomcat 集群本机路径与生成文件（含真实路径与密码，勿提交）
 deploy/cluster/*.local.bat
 !deploy/cluster/cluster.local.example.bat

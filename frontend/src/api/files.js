@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const http = axios.create({ baseURL: '/api' });
+import http from './http';
 
 /**
  * 小文件批量上传：一次请求提交多个文件
@@ -11,7 +9,7 @@ export function batchUpload(files, orderId) {
   const form = new FormData();
   files.forEach((f) => form.append('files', f));
   return http.post('/files/batch-upload', form, {
-    params: orderId == null ? {} : { orderId }
+    params: orderId === null ? {} : { orderId }
   }).then((r) => r.data);
 }
 
