@@ -51,8 +51,17 @@ public class PermissionService {
 
         List<Permission> permissions = permissionRepository.findEnabledByRoleIds(roleIds);
         if (permissions.stream().anyMatch(permission -> "*:*".equals(permission.getCode()))) {
-            // 超级权限仍需返回全部菜单，前端才能动态挂载完整导航。
-            permissions = permissionRepository.findByIsDeletedOrderBySortNoAscIdAsc(0);
+            // *:* 超级权限只补齐 API/BUTTON 安全码（接口全通）；
+            // 菜单仍按角色显式授予，避免管理员导航混入各角色专属页面（如师傅接单工作台）。
+            Set<Long> grantedIds = permissions.stream()
+                    .map(Permission::getId)
+                    .collect(java.util.stream.Collectors.toSet());
+            List<Permission> extras = permissionRepository.findByIsDeletedOrderBySortNoAscIdAsc(0).stream()
+                    .filter(permission -> !"MENU".equalsIgnoreCase(permission.getType()))
+                    .filter(permission -> !grantedIds.contains(permission.getId()))
+                    .toList();
+            permissions = new ArrayList<>(permissions);
+            permissions.addAll(extras);
         }
         Set<String> permissionCodes = permissions.stream()
                 .map(Permission::getCode)

@@ -10,9 +10,9 @@ USE campus_repair;
 -- ---------------------------------------------------------------------
 -- 1. 调度模块权限（挂到 menu:repair 之下）
 -- ---------------------------------------------------------------------
--- 1a. 调度工作台菜单（component=Dispatch 映射 dynamicRoutes.js 视图）
+-- 1a. 调度工作台菜单（component=Dispatch 映射 dynamicRoutes.js 视图；顶级菜单）
 INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `route_path`, `component`, `api_path`, `http_method`, `icon`, `sort_no`)
-SELECT 'menu:dispatch', '调度工作台', 'MENU', 9, '/dispatch', 'Dispatch', NULL, NULL, 'Van', 10
+SELECT 'menu:dispatch', '调度工作台', 'MENU', NULL, '/dispatch', 'Dispatch', NULL, NULL, 'Van', 7
 WHERE NOT EXISTS (SELECT 1 FROM `permission` p WHERE p.`code` = 'menu:dispatch');
 
 INSERT INTO `role_permission` (`role_id`, `permission_id`)
@@ -73,6 +73,24 @@ SELECT u.`id`, r.`id` FROM `user` u, `role` r
 WHERE u.`username` IN ('demo_stu1', 'demo_stu2', 'demo_stu3') AND r.`code` = 'STUDENT'
   AND NOT EXISTS (SELECT 1 FROM `user_role` ur
                   WHERE ur.`user_id` = u.`id` AND ur.`role_id` = r.`id`);
+
+-- ---------------------------------------------------------------------
+-- 3c. 菜单归属修正：调度工作台提为顶级菜单（原先误挂在智能报修下）
+-- ---------------------------------------------------------------------
+UPDATE `permission`
+SET `parent_id` = NULL, `sort_no` = 7
+WHERE `code` = 'menu:dispatch' AND `parent_id` IS NOT NULL;
+
+-- ---------------------------------------------------------------------
+-- 3d. ADMIN 显式授予菜单（菜单按角色精确授予；*:* 只补 API 权限）。
+--     排除 menu:workbench——接单工作台是维修人员专属，管理员不显示
+-- ---------------------------------------------------------------------
+INSERT INTO `role_permission` (`role_id`, `permission_id`)
+SELECT r.`id`, p.`id` FROM `role` r, `permission` p
+WHERE r.`code` = 'ADMIN'
+  AND p.`type` = 'MENU' AND p.`is_deleted` = 0 AND p.`code` <> 'menu:workbench'
+  AND NOT EXISTS (SELECT 1 FROM `role_permission` rp
+                  WHERE rp.`role_id` = r.`id` AND rp.`permission_id` = p.`id`);
 
 -- ---------------------------------------------------------------------
 -- 4. 师傅端工作台菜单（仅 WORKER 角色；ADMIN 不需要）
