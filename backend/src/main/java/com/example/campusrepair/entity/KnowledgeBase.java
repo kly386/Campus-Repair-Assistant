@@ -60,6 +60,10 @@ public class KnowledgeBase {
     @Column(name = "review_status", nullable = false, length = 20)
     private String reviewStatus;
 
+    /** 向量化结果（DashScope text-embedding-v4，float[] 序列化为字节；未向量化为空） */
+    @Column(name = "embedding", columnDefinition = "BLOB")
+    private byte[] embedding;
+
     /** 软删标记：0=正常 / 1=已删除（物理不删，历史可追溯） */
     @Column(name = "is_deleted", nullable = false)
     private Boolean isDeleted;

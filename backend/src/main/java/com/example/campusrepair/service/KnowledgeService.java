@@ -1,5 +1,6 @@
 package com.example.campusrepair.service;
 
+import com.example.campusrepair.dto.DiagnosisResult;
 import com.example.campusrepair.dto.KnowledgeSaveRequest;
 import com.example.campusrepair.entity.KnowledgeBase;
 import com.example.campusrepair.entity.KnowledgeHistory;
@@ -51,4 +52,12 @@ public interface KnowledgeService {
 
     /** "有帮助"计数原子 +1，返回累加后的最新值 */
     long helpful(Long id);
+
+    /* ---------- 自助诊断（RAG 问答） ---------- */
+
+    /** 学生提问：向量检索 Top-K（降级 LIKE）→ 组织答案 → 落 diagnosis_session */
+    DiagnosisResult ask(Long userId, String question);
+
+    /** 学生反馈"是否解决"：is_solved 落库；解决时给命中条目 helpful +1 */
+    void markSolved(Long sessionId, Long userId, boolean solved);
 }

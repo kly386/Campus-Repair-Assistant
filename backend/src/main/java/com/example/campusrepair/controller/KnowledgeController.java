@@ -1,6 +1,8 @@
 package com.example.campusrepair.controller;
 
+import com.example.campusrepair.config.AuthContext;
 import com.example.campusrepair.dto.ApiResponse;
+import com.example.campusrepair.dto.DiagnosisResult;
 import com.example.campusrepair.dto.KnowledgeSaveRequest;
 import com.example.campusrepair.entity.KnowledgeBase;
 import com.example.campusrepair.entity.KnowledgeHistory;
@@ -67,6 +69,23 @@ public class KnowledgeController {
     public ApiResponse<Map<String, Long>> helpful(@PathVariable Long id) {
         long count = knowledgeService.helpful(id);
         return ApiResponse.success("感谢反馈", Map.of("helpful", count));
+    }
+
+    /** 自助诊断提问：RAG 检索 Top-K + 问答记录落库 */
+    @PostMapping("/session")
+    @RequirePermission("menu:diagnosis")
+    public ApiResponse<DiagnosisResult> ask(@RequestBody Map<String, String> body) {
+        String question = body == null ? null : body.get("question");
+        return ApiResponse.success(knowledgeService.ask(AuthContext.userId(), question));
+    }
+
+    /** 问答反馈：?solved=true|false（解决时命中条目 helpful +1） */
+    @PutMapping("/session/{sessionId}/solved")
+    @RequirePermission("menu:diagnosis")
+    public ApiResponse<Void> markSolved(@PathVariable Long sessionId,
+                                        @RequestParam(defaultValue = "true") boolean solved) {
+        knowledgeService.markSolved(sessionId, AuthContext.userId(), solved);
+        return ApiResponse.success("感谢反馈", null);
     }
 
     /* ---------- 管理员口 ---------- */
