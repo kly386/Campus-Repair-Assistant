@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Optional;
 
 /**
  * 师傅排班数据访问仓库
@@ -49,6 +50,15 @@ public interface WorkerScheduleRepository extends JpaRepository<WorkerSchedule, 
      */
     List<WorkerSchedule> findByWorkDate(LocalDate workDate);
 
+    /**
+     * 查询师傅某日期区间的排班（工作台周视图）
+     *
+     * @param workerId 师傅ID
+     * @param start    起始日期（含）
+     * @param end      结束日期（含）
+     * @return 排班列表
+     */
+    List<WorkerSchedule> findByWorkerIdAndWorkDateBetween(Long workerId, LocalDate start, LocalDate end);
     /**
      * 派单成功后原子递增已接单数，条件 FREE 且未饱和，防止并发超发
      *

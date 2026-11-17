@@ -72,6 +72,14 @@ public interface RepairOrderRepository extends JpaRepository<RepairOrder, Long> 
                                           @Param("statuses") List<String> statuses);
 
     /**
+     * 查询师傅名下的工单
+     *
+     * @param workerId 师傅ID
+     * @return 工单列表
+     */
+    List<RepairOrder> findByWorkerId(Long workerId);
+
+    /**
      * 查询待派单工单：紧急优先、先到先处理
      *
      * @return 工单列表

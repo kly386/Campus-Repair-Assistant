@@ -60,7 +60,29 @@ WHERE NOT EXISTS (
 );
 
 -- ---------------------------------------------------------------------
--- 4. 演示专长（工单类别 1~5 参照 init.sql；有则跳过）
+-- 3b. 补齐演示师傅 user_role 关联（user 5/6 缺失会导致接口 403；有则跳过）
+-- ---------------------------------------------------------------------
+INSERT INTO `user_role` (`user_id`, `role_id`)
+SELECT u.`id`, r.`id` FROM `user` u, `role` r
+WHERE u.`username` IN ('demo_worker1', 'demo_worker2') AND r.`code` = 'WORKER'
+  AND NOT EXISTS (SELECT 1 FROM `user_role` ur
+                  WHERE ur.`user_id` = u.`id` AND ur.`role_id` = r.`id`);
+
+-- ---------------------------------------------------------------------
+-- 4. 师傅端工作台菜单（仅 WORKER 角色；ADMIN 不需要）
+-- ---------------------------------------------------------------------
+INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `route_path`, `component`, `api_path`, `http_method`, `icon`, `sort_no`)
+SELECT 'menu:workbench', '接单工作台', 'MENU', NULL, '/workbench', 'Workbench', NULL, NULL, 'Suitcase', 11
+WHERE NOT EXISTS (SELECT 1 FROM `permission` p WHERE p.`code` = 'menu:workbench');
+
+INSERT INTO `role_permission` (`role_id`, `permission_id`)
+SELECT r.`id`, p.`id` FROM `role` r, `permission` p
+WHERE r.`code` = 'WORKER' AND p.`code` = 'menu:workbench'
+  AND NOT EXISTS (SELECT 1 FROM `role_permission` rp
+                  WHERE rp.`role_id` = r.`id` AND rp.`permission_id` = p.`id`);
+
+-- ---------------------------------------------------------------------
+-- 5. 演示专长（工单类别 1~5 参照 init.sql；有则跳过）
 -- ---------------------------------------------------------------------
 INSERT INTO `worker_specialty` (`worker_id`, `category_id`)
 SELECT s.worker_id, s.category_id FROM (
