@@ -21,6 +21,8 @@
         <java.version>17</java.version>
         <jjwt.version>0.12.6</jjwt.version>
         <aws-sdk.version>2.25.64</aws-sdk.version>
+        <!-- 1.18.34 认不出 JDK 24/25 的 javac（TypeTag :: UNKNOWN），钉到新版兼容全组各版本 JDK -->
+        <lombok.version>1.18.42</lombok.version>
     </properties>
 
     <dependencies>
