@@ -4,6 +4,7 @@ const viewModules = {
   Dashboard: () => import('../views/Dashboard.vue'),
   Diagnosis: () => import('../views/Diagnosis.vue'),
   Orders: () => import('../views/Orders.vue'),
+  Dispatch: () => import('../views/Dispatch.vue'),
   Schedule: () => import('../views/Schedule.vue'),
   Files: () => import('../views/Files.vue'),
   Repair: () => import('../views/Repair.vue'),

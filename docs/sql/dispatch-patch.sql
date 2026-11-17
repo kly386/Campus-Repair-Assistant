@@ -10,10 +10,25 @@ USE campus_repair;
 -- ---------------------------------------------------------------------
 -- 1. 调度模块权限（挂到 menu:repair 之下）
 -- ---------------------------------------------------------------------
-INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `route_path`, `component`, `api_path`, `http_method`, `icon`, `sort_no`) VALUES
-('dispatch:auto',       '自动派单',   'API', 9, NULL, NULL, '/api/dispatch/**', 'POST',   'MagicStick', 61),
-('dispatch:reschedule', '工单改约',   'API', 9, NULL, NULL, '/api/dispatch/**', 'PUT',    'Clock',      62),
-('dispatch:read',       '派单审计',   'API', 9, NULL, NULL, '/api/dispatch/**', 'GET',    'View',       63);
+-- 1a. 调度工作台菜单（component=Dispatch 映射 dynamicRoutes.js 视图）
+INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `route_path`, `component`, `api_path`, `http_method`, `icon`, `sort_no`)
+SELECT 'menu:dispatch', '调度工作台', 'MENU', 9, '/dispatch', 'Dispatch', NULL, NULL, 'Van', 10
+WHERE NOT EXISTS (SELECT 1 FROM `permission` p WHERE p.`code` = 'menu:dispatch');
+
+INSERT INTO `role_permission` (`role_id`, `permission_id`)
+SELECT 1, p.`id` FROM `permission` p
+WHERE p.`code` = 'menu:dispatch'
+  AND NOT EXISTS (SELECT 1 FROM `role_permission` rp
+                  WHERE rp.`role_id` = 1 AND rp.`permission_id` = p.`id`);
+
+-- 1b. 调度模块接口权限
+INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `route_path`, `component`, `api_path`, `http_method`, `icon`, `sort_no`)
+SELECT s.code, s.name, 'API', 9, NULL, NULL, s.api, s.method, s.icon, s.sort FROM (
+    SELECT 'dispatch:auto' AS code, '自动派单' AS name, '/api/dispatch/**' AS api, 'POST' AS method, 'MagicStick' AS icon, 61 AS sort UNION ALL
+    SELECT 'dispatch:reschedule', '工单改约', '/api/dispatch/**', 'PUT', 'Clock', 62 UNION ALL
+    SELECT 'dispatch:read', '派单审计', '/api/dispatch/**', 'GET', 'View', 63
+) s
+WHERE NOT EXISTS (SELECT 1 FROM `permission` p WHERE p.`code` = s.code);
 
 -- ---------------------------------------------------------------------
 -- 2. 管理员角色（id=1）授予调度权限
