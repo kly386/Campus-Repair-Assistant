@@ -20,17 +20,19 @@
 
     <!-- 图表区 -->
     <el-row :gutter="16" class="chart-row">
-      <el-col :span="12">
+      <el-col :span="24">
         <el-card shadow="hover" header="近 14 天工单趋势">
           <div ref="trendRef" class="chart"></div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+    </el-row>
+    <el-row :gutter="16" class="chart-row">
+      <el-col :span="12">
         <el-card shadow="hover" header="工单状态分布">
           <div ref="statusRef" class="chart"></div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col :span="12">
         <el-card shadow="hover" header="紧急度分布">
           <div ref="emergencyRef" class="chart"></div>
         </el-card>
@@ -146,7 +148,7 @@ function renderTrend(list) {
   });
 }
 
-/** 饼图：状态 / 紧急度 */
+/** 饼图：状态 / 紧急度（恢复原样式：外标签+底部图例，半屏宽度足够展示） */
 function renderPie(el, list, name) {
   if (!el) return;
   const chart = getChart(el);
@@ -154,8 +156,8 @@ function renderPie(el, list, name) {
     tooltip: { trigger: 'item', formatter: '{b}: {c} 单 ({d}%)' },
     legend: { bottom: 0, type: 'scroll' },
     series: [{
-      name, type: 'pie', radius: ['38%', '65%'], center: ['50%', '44%'],
-      data: list, label: { formatter: '{b} {d}%' }
+      name, type: 'pie', radius: ['38%', '62%'], center: ['50%', '44%'],
+      data: list, label: { formatter: '{b} {d}%', fontSize: 12 }
     }]
   });
 }
