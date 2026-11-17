@@ -10,9 +10,10 @@ USE campus_repair;
 -- ---------------------------------------------------------------------
 -- 1. 调度模块权限（挂到 menu:repair 之下）
 -- ---------------------------------------------------------------------
--- 1a. 调度工作台菜单（component=Dispatch 映射 dynamicRoutes.js 视图）
+-- 1a. 调度工作台菜单（顶级菜单；component=Dispatch 映射 dynamicRoutes.js 视图。
+--     注意：不要挂到 menu:repair 之下，否则智能报修会被渲染成不可点击的分组）
 INSERT INTO `permission` (`code`, `name`, `type`, `parent_id`, `route_path`, `component`, `api_path`, `http_method`, `icon`, `sort_no`)
-SELECT 'menu:dispatch', '调度工作台', 'MENU', 9, '/dispatch', 'Dispatch', NULL, NULL, 'Van', 10
+SELECT 'menu:dispatch', '调度工作台', 'MENU', NULL, '/dispatch', 'Dispatch', NULL, NULL, 'Van', 10
 WHERE NOT EXISTS (SELECT 1 FROM `permission` p WHERE p.`code` = 'menu:dispatch');
 
 INSERT INTO `role_permission` (`role_id`, `permission_id`)

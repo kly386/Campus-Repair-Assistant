@@ -1,15 +1,13 @@
 import http from './http';
 
 /**
- * 知识库接口（契约由闵娟提供，见 docs/接口设计.md）
+ * 知识库接口（对接闵娟 KnowledgeController 实际路径）
  * 学生口：按类别浏览(仅 APPROVED)/搜索/有帮助+1
- * 管理员口：新增/编辑/回滚/审核/软删
- *
- * 注：list/history 两个接口契约里暂缺，路径为约定值，待闵娟实现后如有出入只改本文件。
+ * 管理员口：admin/list、CRUD、review、rollback、history、软删
  */
 
 export function listKnowledge(params) {
-  return http.get('/knowledge/list', { params }).then((r) => r.data);
+  return http.get('/knowledge/admin/list', { params }).then((r) => r.data);
 }
 
 export function searchKnowledge(q) {
@@ -45,5 +43,5 @@ export function deleteKnowledge(id) {
 }
 
 export function listKnowledgeHistory(knowledgeId) {
-  return http.get(`/knowledge/history/${knowledgeId}`).then((r) => r.data);
+  return http.get(`/knowledge/${knowledgeId}/history`).then((r) => r.data);
 }

@@ -9,7 +9,7 @@ const viewModules = {
   Schedule: () => import('../views/Schedule.vue'),
   Files: () => import('../views/Files.vue'),
   Repair: () => import('../views/Repair.vue'),
-  KnowledgeReview: () => import('../views/KnowledgeReview.vue'),
+  Knowledge: () => import('../views/Knowledge.vue'),
   Users: () => import('../views/Placeholder.vue'),
   Roles: () => import('../views/Placeholder.vue')
 };
