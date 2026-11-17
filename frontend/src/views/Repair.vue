@@ -12,6 +12,15 @@
             <div v-for="(f, idx) in files" :key="idx">{{ f.name }} ({{ formatSize(f.size) }})</div>
           </div>
         </el-form-item>
+        <el-form-item label="AI 解析">
+          <el-button type="success" plain :loading="parsing" @click="handleAiParse">
+            AI 智能解析
+          </el-button>
+          <span class="ai-tip">填描述/传照片后点击，自动补全下方字段</span>
+        </el-form-item>
+        <el-alert v-if="parseResult" :title="aiAlertTitle" :type="parseResult.mock ? 'warning' : 'success'"
+                  :closable="false" style="margin-bottom: 16px"
+                  :description="aiAlertDetail" show-icon />
         <el-form-item label="楼栋">
           <el-input v-model="form.building" placeholder="例如：3号宿舍楼" />
         </el-form-item>
@@ -55,10 +64,10 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { createOrder } from '../api/orders'
+import { createOrder, parseRepair } from '../api/orders'
 import { batchUpload, listByOrder, getSignedUrl } from '../api/files'
 
 const router = useRouter()
@@ -75,6 +84,52 @@ const submitting = ref(false)
 const submitted = ref(false)
 const orderId = ref(null)
 const attachments = ref([])
+const parsing = ref(false)
+const parseResult = ref(null)
+
+/** AI 解析结果提示条 */
+const aiAlertTitle = computed(() => {
+  const r = parseResult.value
+  if (!r) return ''
+  const mockTag = r.mock ? '【模拟数据】' : ''
+  return `${mockTag}识别类别：${r.categoryName}｜紧急度：${r.emergencyLevel}｜置信度：${(r.confidence * 100).toFixed(0)}%`
+})
+const aiAlertDetail = computed(() => {
+  const r = parseResult.value
+  if (!r) return ''
+  const filled = ['building', 'room'].filter((k) => r[k]).map((k) => (k === 'building' ? '楼栋' : '房间号'))
+  const notes = (r.notes || []).join('；')
+  return `已自动回填${filled.length ? filled.join('、') : '紧急度'}${notes ? '。' + notes : ''}`
+})
+
+/**
+ * AI 智能解析：把描述 + 照片发给 /api/orders/parse，
+ * 返回结果自动回填楼栋/房间/紧急程度，用户确认后再提交
+ */
+async function handleAiParse() {
+  if (!form.value.description && files.value.length === 0) {
+    ElMessage.warning('请先填写故障描述或上传照片')
+    return
+  }
+  parsing.value = true
+  try {
+    const fd = new FormData()
+    fd.append('text', form.value.description || '')
+    for (const f of files.value) {
+      fd.append('images', f)
+    }
+    const r = await parseRepair(fd)
+    parseResult.value = r
+    if (r.building) form.value.building = r.building
+    if (r.room) form.value.room = r.room
+    if (r.emergencyLevel) form.value.emergencyLevel = r.emergencyLevel.toLowerCase()
+    ElMessage.success('AI 解析完成，请确认后提交')
+  } catch (e) {
+    ElMessage.error('AI 解析失败：' + errText(e))
+  } finally {
+    parsing.value = false
+  }
+}
 
 function onFileChange(e) {
   files.value = Array.from(e.target.files || [])
@@ -97,13 +152,17 @@ function errText(e) {
 async function handleSubmit() {
   submitting.value = true
   try {
+    const pr = parseResult.value
     const order = await createOrder({
       description: form.value.description,
-      title: form.value.description?.slice(0, 50) || '报修',
+      title: (pr && pr.title) || form.value.description?.slice(0, 50) || '报修',
       building: form.value.building,
       room: form.value.room,
       appointmentTime: form.value.appointmentTime || null,
-      emergencyLevel: form.value.emergencyLevel
+      emergencyLevel: (form.value.emergencyLevel || 'low').toUpperCase(),
+      categoryId: pr ? pr.categoryId : null,
+      aiParsedInfo: pr ? pr.aiParsedInfo : null,
+      aiConfidence: pr ? pr.confidence : null
     })
     const newOrderId = order.id
     orderId.value = newOrderId
@@ -155,6 +214,7 @@ function reset() {
   if (fileInput.value) fileInput.value.value = ''
   attachments.value = []
   orderId.value = null
+  parseResult.value = null
 }
 </script>
 
@@ -167,5 +227,10 @@ function reset() {
 }
 .success-card {
   max-width: 600px;
+}
+.ai-tip {
+  margin-left: 12px;
+  font-size: 12px;
+  color: #909399;
 }
 </style>
