@@ -141,4 +141,21 @@ public class KnowledgeController {
     public ApiResponse<List<KnowledgeHistory>> history(@PathVariable Long id) {
         return ApiResponse.success(knowledgeService.history(id));
     }
+
+    /* ---------- 别名路由（对接 KnowledgeReview.vue 前端契约，伍梦瑶） ---------- */
+
+    /** GET /knowledge/list —— 管理员列表别名（同 admin/list） */
+    @GetMapping("/list")
+    @RequirePermission("knowledge:manage")
+    public ApiResponse<List<KnowledgeBase>> listAlias(@RequestParam(required = false) String status,
+                                                      @RequestParam(required = false) Long categoryId) {
+        return adminList(status, categoryId);
+    }
+
+    /** GET /knowledge/history/{knowledgeId} —— 版本历史别名（同 /{id}/history） */
+    @GetMapping("/history/{knowledgeId}")
+    @RequirePermission("knowledge:manage")
+    public ApiResponse<List<KnowledgeHistory>> historyAlias(@PathVariable Long knowledgeId) {
+        return history(knowledgeId);
+    }
 }
