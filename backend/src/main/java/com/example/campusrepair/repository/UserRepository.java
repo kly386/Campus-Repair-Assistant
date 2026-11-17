@@ -5,22 +5,18 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
 
-/**
- * 用户数据访问
- *
- * @Description 支持按 登录名 / 手机号 / 微信openid 三种方式检索用户
- * @Author 开璐瑶
- * @Date 2026-11-10
- * @Version 1.0
- */
+/** 用户数据访问；四种登录方式分别按用户名、手机号、邮箱、微信 openid 检索。 */
 public interface UserRepository extends JpaRepository<User, Long> {
 
-    /** 按登录名查有效用户（isDeleted=0 表示未删除） */
     Optional<User> findByUsernameAndIsDeleted(String username, Integer isDeleted);
 
-    /** 按手机号查有效用户（短信登录） */
     Optional<User> findByPhoneAndIsDeleted(String phone, Integer isDeleted);
 
-    /** 按微信 openid 查有效用户（扫码登录） */
+    Optional<User> findByEmailAndIsDeleted(String email, Integer isDeleted);
+
     Optional<User> findByWxOpenidAndIsDeleted(String wxOpenid, Integer isDeleted);
+
+    Optional<User> findByIdAndIsDeleted(Long id, Integer isDeleted);
+
+    boolean existsByUsername(String username);
 }

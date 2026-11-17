@@ -14,7 +14,7 @@
               <input ref="smallInput" type="file" multiple @change="onSmallPick" />
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" :loading="smallUploading" :disabled="smallFiles.length === 0"
+              <el-button v-permission="'file:upload'" type="primary" :loading="smallUploading" :disabled="smallFiles.length === 0"
                          @click="doBatchUpload">
                 批量上传 {{ smallFiles.length }} 个（一次请求）
               </el-button>
@@ -31,7 +31,7 @@
               <input ref="bigInput" type="file" @change="onBigPick" />
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" :loading="bigUploading" :disabled="!bigFile"
+              <el-button v-permission="'file:upload'" type="primary" :loading="bigUploading" :disabled="!bigFile"
                          @click="doChunkUpload">
                 {{ bigUploadId ? `继续上传（从第 ${bigNextIndex} 片，共 ${chunkCount} 片）` : `分片上传（${chunkCount} 片）` }}
               </el-button>
@@ -53,7 +53,7 @@
             </el-form-item>
             <el-form-item>
               <el-button @click="loadList">查询</el-button>
-              <el-button type="success" :disabled="list.length === 0" @click="onZip">
+              <el-button v-permission="'file:read'" type="success" :disabled="list.length === 0" @click="onZip">
                 打包 ZIP 下载（{{ list.length }} 个）
               </el-button>
             </el-form-item>

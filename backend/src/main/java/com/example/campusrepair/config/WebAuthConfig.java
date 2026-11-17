@@ -6,12 +6,10 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * 鉴权拦截配置
+ * 鉴权拦截配置。
  *
- * @Description 拦截 /api/**，白名单仅放行 登录入口 /api/auth/** 与运维健康检查 /api/system/**。
- * @Author 开璐瑶
- * @Date 2026-11-10
- * @Version 1.0
+ * <p>只放行必要的登录入口和扫码轮询；退出、刷新之外的业务接口全部统一经过
+ * {@link AuthInterceptor}。刷新接口本身不需要 access Token，但会在控制器内校验 refresh Token。</p>
  */
 @Configuration
 @RequiredArgsConstructor
@@ -24,8 +22,20 @@ public class WebAuthConfig implements WebMvcConfigurer {
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
-                        "/api/auth/**",   // 登录入口
-                        "/api/system/**"  // 运维健康检查（集群/读写分离验证）
+                        "/api/auth/captcha",
+                        "/api/auth/login",
+                        "/api/auth/code/send",
+                        "/api/auth/sms/send",
+                        "/api/auth/sms/login",
+                        "/api/auth/email/send",
+                        "/api/auth/email/login",
+                        "/api/auth/wx/qrcode",
+                        "/api/auth/wx/state",
+                        "/api/auth/wx/callback",
+                        "/api/auth/wx/mock/**",
+                        "/api/auth/refresh",
+                        "/api/system/node",
+                        "/error"
                 );
     }
 }

@@ -1,180 +1,268 @@
 package com.example.campusrepair.service;
 
+import com.example.campusrepair.dto.ClientInfo;
+import com.example.campusrepair.dto.LoginResult;
 import com.example.campusrepair.entity.User;
+import com.example.campusrepair.exception.AuthException;
+import com.example.campusrepair.exception.ErrorCode;
 import com.example.campusrepair.repository.UserRepository;
-import com.example.campusrepair.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
- * 登录认证服务
+ * 统一认证服务。
  *
- * @Description 鉴权核心：账密+图形验证码 / 手机短信验证码 / 微信扫码（模拟） 三种方式统一签发 JWT。
- *              反爬由 RateLimitService（频次）+ AuthCodeService（失败锁定）配合
- *              AuthController 完成。首次短信/微信登录自动开通 STUDENT 账号。
- * @Author 开璐瑶
- * @Date 2026-11-10
- * @Version 1.0
+ * <p>四种登录方式最终都走 {@link #completeLogin}：检查账号锁定状态、签发
+ * access/refresh Token、建立可吊销会话、加载动态 RBAC 权限并写登录审计。
+ * 密码错误计数和锁定使用独立事务，保证失败记录不会因 401/423 异常回滚。</p>
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
+    private static final Pattern PHONE_PATTERN = Pattern.compile("^1[3-9]\\d{9}$");
+    private static final Pattern EMAIL_PATTERN = Pattern.compile(
+            "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
+
     private final UserRepository userRepository;
+    private final UserRegistrationService userRegistrationService;
     private final AuthCodeService authCodeService;
-    private final JwtUtil jwtUtil;
+    private final AccountLockService accountLockService;
+    private final PermissionService permissionService;
+    private final TokenSessionService tokenSessionService;
+    private final AuthAuditService auditService;
+    private final SmsCodeSender smsCodeSender;
+    private final EmailCodeSender emailSender;
+    private final WechatLoginService wechatLoginService;
 
-    /** 短信是否为模拟模式：true 时验证码回显给前端，便于演示与联调 */
-    @Value("${app.auth.sms-mock:true}")
-    private boolean smsMock;
+    // ======================== 1. 账号密码登录 ========================
 
-    // ---------------- 通用 ----------------
-
-    /**
-     * 登录成功统一出口：清失败计数 → 签发 token
-     */
-    private LoginResult issueToken(User user) {
-        String token = jwtUtil.issue(user.getId(), user.getRole());
-        return new LoginResult(token, user.getUsername(), user.getRealName(), user.getRole());
-    }
-
-    /**
-     * 创建新用户（首次短信/微信登录自动注册）
-     */
-    private User createUser(String username, String rawPassword, String realName,
-                            String role, String phone, String wxOpenid) {
-        User u = new User();
-        u.setUsername(username);
-        u.setPassword(BCrypt.hashpw(rawPassword, BCrypt.gensalt()));
-        u.setRealName(realName);
-        u.setRole(role);
-        u.setPhone(phone);
-        u.setWxOpenid(wxOpenid);
-        u.setIsDeleted(0);
-        return userRepository.save(u);
-    }
-
-    // ================= 1. 账密 + 图形验证码登录 =================
-
-    /**
-     * 账密登录（校验图形验证码 → 账密 → BCrypt/兼容明文）
-     *
-     * @param loginKey 防爆破维度（一般传用户名或 IP），失败计数与解锁都基于它
-     */
     public LoginResult loginByPassword(String username, String rawPassword,
-                                       String captchaId, String captchaCode, String loginKey) {
-        // 1) 图形验证码：取出即删，防重放
-        String stored = authCodeService.consumeCaptcha(captchaId);
-        if (stored == null || captchaCode == null || !stored.equalsIgnoreCase(captchaCode.trim())) {
-            throw new IllegalArgumentException("验证码错误或已过期");
+                                       String captchaId, String captchaCode, ClientInfo client) {
+        if (!StringUtils.hasText(username) || !StringUtils.hasText(rawPassword)) {
+            throw AuthException.badRequest("用户名和密码不能为空",
+                    ErrorCode.VALIDATION_ERROR, ErrorCode.CHANNEL_AUTH);
+        }
+        if (!authCodeService.verifyCaptcha(captchaId, captchaCode)) {
+            auditService.recordLogin(null, "PASSWORD", username, client, false, "图形验证码错误或已过期");
+            throw AuthException.badRequest("图形验证码错误或已过期",
+                    ErrorCode.CAPTCHA_INVALID, ErrorCode.CHANNEL_AUTH);
         }
 
-        // 2) 账密
-        User user = userRepository.findByUsernameAndIsDeleted(username, 0)
-                .orElseThrow(() -> new IllegalArgumentException("账号或密码错误"));
-        if (!passwordMatches(user.getPassword(), rawPassword)) {
-            throw new IllegalArgumentException("账号或密码错误");
+        User user = userRepository.findByUsernameAndIsDeleted(username.trim(), 0).orElse(null);
+        if (user == null) {
+            auditService.recordLogin(null, "PASSWORD", username, client, false, "账号或密码错误");
+            throw AuthException.unauthorized("账号或密码错误");
         }
 
-        // 3) 成功 → 清空失败计数并签发
-        authCodeService.clearLoginFail(loginKey);
-        return issueToken(user);
+        accountLockService.assertLoginAllowed(user);
+        if (!passwordMatches(user, rawPassword)) {
+            AccountLockService.FailureOutcome outcome = accountLockService.recordPasswordFailure(user, client);
+            auditService.recordLogin(user.getId(), "PASSWORD", username, client, false,
+                    outcome.locked() ? "连续密码错误，账号锁定" : "密码错误");
+            if (outcome.locked()) {
+                throw AuthException.accountLocked(outcome.lockRemainingMinutes());
+            }
+            throw AuthException.of(org.springframework.http.HttpStatus.UNAUTHORIZED,
+                    "账号或密码错误，还可尝试 " + outcome.remainingAttempts() + " 次",
+                    ErrorCode.INVALID_CREDENTIALS, ErrorCode.CHANNEL_AUTH, false,
+                    Map.of("remainingAttempts", outcome.remainingAttempts()));
+        }
+
+        accountLockService.clearPasswordFailures(user);
+        return completeLogin(user, "PASSWORD", client);
     }
 
-    /**
-     * 密码校验：BCrypt 哈希比对；历史明文数据命中后自动升级为 BCrypt 再入库
-     */
-    private boolean passwordMatches(String stored, String raw) {
-        if (raw == null) {
-            return false;
-        }
+    /** 兼容历史明文密码；命中后立即升级为 BCrypt，防止后续继续泄露明文。 */
+    private boolean passwordMatches(User user, String rawPassword) {
+        String stored = user.getPassword();
         if (stored != null && stored.startsWith("$2")) {
-            return BCrypt.checkpw(raw, stored);
+            return BCrypt.checkpw(rawPassword, stored);
         }
-        // 兼容 init.sql 遗留明文；命中即升级哈希（防拖库泄露明文）
-        if (stored != null && stored.equals(raw)) {
-            log.info("检测到明文密码，建议执行升级脚本改为 BCrypt");
+        if (stored != null && stored.equals(rawPassword)) {
+            user.setPassword(BCrypt.hashpw(rawPassword, BCrypt.gensalt()));
+            userRepository.save(user);
+            log.info("用户 {} 的明文密码已升级为 BCrypt", user.getId());
             return true;
         }
         return false;
     }
 
-    // ================= 2. 手机短信验证码登录 =================
-
     /**
-     * 发送短信验证码（模拟：验证码直接返回前端展示，真实接入替换为短信服务商 SDK）
-     *
-     * @return 验证码明文（smsMock=true 时）或 null
+     * 统一验证码发送入口，按前端 type 分发到手机短信或邮箱发送器。
      */
-    public String sendSmsCode(String phone) {
+    public CodeSendResult sendVerificationCode(String type, String target) {
+        String normalizedType = type == null ? "" : type.trim().toUpperCase();
+        return switch (normalizedType) {
+            case "PHONE", "SMS" -> sendSmsCode(target);
+            case "EMAIL" -> sendEmailCode(target);
+            default -> throw AuthException.badRequest("不支持的验证码类型: " + type,
+                    ErrorCode.CODE_TYPE_UNSUPPORTED, ErrorCode.CHANNEL_AUTH);
+        };
+    }
+
+    // ======================== 2. 短信验证码登录 ========================
+
+    public CodeSendResult sendSmsCode(String phone) {
+        validatePhone(phone);
         String code = authCodeService.generateSmsCode(phone);
-        if (smsMock) {
-            log.info("[MOCK] 短信发送到 {}，验证码 {}", phone, code);
-            return code;
+        try {
+            smsCodeSender.send(phone, code);
+        } catch (RuntimeException e) {
+            authCodeService.verifySmsCode(phone, code);
+            throw e;
         }
-        // TODO 生产接入：aliyun dysmsapi / 腾讯云 SMS SDK
-        return null;
+        return new CodeSendResult(smsCodeSender.isMock() ? code : null, smsCodeSender.isMock());
     }
 
-    /**
-     * 验证码登录：手机号未注册则自动创建学生账号
-     */
-    public LoginResult loginBySms(String phone, String smsCode) {
-        String stored = authCodeService.consumeSmsCode(phone);
-        if (stored == null || smsCode == null || !stored.equals(smsCode.trim())) {
-            throw new IllegalArgumentException("验证码错误或已过期");
+    public LoginResult loginBySms(String phone, String code, ClientInfo client) {
+        validatePhone(phone);
+        User user = userRepository.findByPhoneAndIsDeleted(phone, 0).orElse(null);
+        if (user != null) {
+            accountLockService.assertLoginAllowed(user);
         }
-
-        User user = userRepository.findByPhoneAndIsDeleted(phone, 0)
-                .orElseGet(() -> {
-                    // 是否已有同名账号？避免手机号误当 username 冲突 → 用 phone 作为 username
-                    log.info("手机号 {} 首次登录，自动注册 STUDENT 账号", phone);
-                    return createUser(phone, phone + "_sms", "学生-" + phone.substring(7),
-                            "STUDENT", phone, null);
-                });
-        return issueToken(user);
+        if (!authCodeService.verifySmsCode(phone, code)) {
+            auditService.recordLogin(user == null ? null : user.getId(), "SMS", phone,
+                    client, false, "短信验证码错误或已过期");
+throw AuthException.unauthorized("验证码错误或已过期", ErrorCode.CODE_INVALID,
+                    ErrorCode.CHANNEL_SMS);
+        }
+        User resolved = user != null ? user : userRegistrationService.register(
+                "sms_" + randomSuffix(), "学生-" + phone.substring(7), "STUDENT", phone, null, null);
+        return completeLogin(resolved, "SMS", client);
     }
 
-    // ================= 3. 微信扫码登录（模拟） =================
+    // ======================== 3. 邮箱验证码登录 ========================
 
-    /**
-     * 扫码登录成功收尾：状态为 CONFIRMED 时绑定/创建账号并签发 token
-     *
-     * @param uuid  扫码会话ID（qrcode 阶段下发）
-     * @return LoginResult，未确认/过期返回 null
-     */
-    public LoginResult finalizeWxLogin(String uuid) {
-        String wxState = authCodeService.peekWxState(uuid);
-        if (!AuthCodeService.WX_CONFIRM.equals(wxState)) {
-            return null;
+    public CodeSendResult sendEmailCode(String email) {
+        validateEmail(email);
+        String normalized = email.trim().toLowerCase();
+        String code = authCodeService.generateEmailCode(normalized);
+        try {
+            emailSender.send(normalized, code);
+        } catch (RuntimeException e) {
+            authCodeService.verifyEmailCode(normalized, code);
+            throw e;
         }
-        // 模拟 openid：以 uuid 派生稳定标识（真实接入则为微信官方 Get access_token→openid）
-        String openid = "wx_mock_" + uuid;
-        User user = userRepository.findByWxOpenidAndIsDeleted(openid, 0)
-                .orElseGet(() -> {
-                    log.info("微信 openid {} 首次登录，自动注册 STUDENT 账号", openid);
-                    String shortId = uuid.substring(uuid.length() - 6);
-                    return createUser("wx_" + shortId, shortId + "_wx", "微信用户" + shortId,
-                            "STUDENT", null, openid);
-                });
-        authCodeService.clearWxState(uuid);
-        return issueToken(user);
+        return new CodeSendResult(emailSender.isMock() ? code : null, emailSender.isMock());
     }
 
-    // ---------------- 内部值对象 ----------------
+    public LoginResult loginByEmail(String email, String code, ClientInfo client) {
+        validateEmail(email);
+        String normalized = email.trim().toLowerCase();
+        User user = userRepository.findByEmailAndIsDeleted(normalized, 0).orElse(null);
+        if (user != null) {
+            accountLockService.assertLoginAllowed(user);
+        }
+        if (!authCodeService.verifyEmailCode(normalized, code)) {
+            auditService.recordLogin(user == null ? null : user.getId(), "EMAIL", normalized,
+                    client, false, "邮箱验证码错误或已过期");
+throw AuthException.unauthorized("验证码错误或已过期", ErrorCode.CODE_INVALID,
+                    ErrorCode.CHANNEL_EMAIL);
+        }
+        User resolved = user != null ? user : userRegistrationService.register(
+                "email_" + randomSuffix(), "邮箱用户", "STUDENT", null, normalized, null);
+        return completeLogin(resolved, "EMAIL", client);
+    }
+
+    // ======================== 4. 微信扫码登录 ========================
 
     /**
-     * 登录成功结果
-     *
-     * @param token    JWT
-     * @param username 登录名
-     * @param realName 真实姓名
-     * @param role     角色
+     * 扫码确认后签发 Token。consumeConfirmed 保证同一扫码会话只成功一次，
+     * 后续轮询返回 USED，不会重复签发。
      */
-    public record LoginResult(String token, String username, String realName, String role) {
+    public LoginResult finalizeWxLogin(String uuid, ClientInfo client) {
+        String openid = wechatLoginService.consumeConfirmed(uuid);
+        if (!StringUtils.hasText(openid)) {
+            throw AuthException.badRequest("二维码未确认、已过期或已被使用");
+        }
+        User user = userRepository.findByWxOpenidAndIsDeleted(openid, 0).orElse(null);
+        if (user != null) {
+            accountLockService.assertLoginAllowed(user);
+        }
+        User resolved = user != null ? user : userRegistrationService.register(
+                "wx_" + randomSuffix(), "微信用户", "STUDENT", null, null, openid);
+        return completeLogin(resolved, "WECHAT", client);
+    }
+
+    // ======================== 5. 刷新与退出 ========================
+
+    public LoginResult refresh(String refreshToken, ClientInfo client) {
+        if (!StringUtils.hasText(refreshToken)) {
+            throw AuthException.unauthorized("刷新凭证不能为空");
+        }
+        TokenSessionService.RefreshedToken refreshed = tokenSessionService.refresh(refreshToken, client);
+        User user = userRepository.findByIdAndIsDeleted(refreshed.userId(), 0)
+                .orElseThrow(() -> AuthException.unauthorized("用户不存在或已删除"));
+        accountLockService.assertLoginAllowed(user);
+        PermissionService.AccessProfile profile = permissionService.loadProfile(user.getId());
+        auditService.recordLogin(user.getId(), "REFRESH", user.getUsername(), client, true, null);
+        return buildLoginResult(user, refreshed.accessToken(), refreshed.refreshToken(),
+                refreshed.expiresIn(), profile);
+    }
+
+    public void logout(String sessionId, Long userId, ClientInfo client) {
+        tokenSessionService.revoke(sessionId, "LOGOUT");
+        auditService.audit("LOGOUT", userId, userId, null, "用户主动退出，会话 " + sessionId, client.ip());
+    }
+
+    // ======================== 通用内部逻辑 ========================
+
+    private LoginResult completeLogin(User user, String loginType, ClientInfo client) {
+        accountLockService.assertLoginAllowed(user);
+        TokenSessionService.TokenBundle tokens = tokenSessionService.createSession(user, client);
+        PermissionService.AccessProfile profile = permissionService.loadProfile(user.getId());
+
+        user.setLastLoginAt(LocalDateTime.now());
+        if (!profile.roles().isEmpty()) {
+            user.setRole(profile.roles().iterator().next());
+        }
+        userRepository.save(user);
+        auditService.recordLogin(user.getId(), loginType,
+                loginType.equals("SMS") ? user.getPhone()
+                        : loginType.equals("EMAIL") ? user.getEmail() : user.getUsername(),
+                client, true, null);
+        return buildLoginResult(user, tokens.accessToken(), tokens.refreshToken(),
+                tokens.expiresIn(), profile);
+    }
+
+    private LoginResult buildLoginResult(User user, String accessToken, String refreshToken,
+                                         long expiresIn, PermissionService.AccessProfile profile) {
+        String primaryRole = profile.roles().stream().findFirst().orElse(user.getRole());
+        return new LoginResult(accessToken, accessToken, refreshToken, "Bearer", expiresIn,
+                user.getId(), user.getUsername(), user.getRealName(), primaryRole,
+                List.copyOf(profile.roles()), profile.permissions(), profile.menus());
+    }
+
+
+    private String randomSuffix() {
+        return UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+    }
+
+    private void validatePhone(String phone) {
+        if (!StringUtils.hasText(phone) || !PHONE_PATTERN.matcher(phone.trim()).matches()) {
+            throw AuthException.badRequest("手机号格式不正确",
+                    ErrorCode.SMS_TARGET_INVALID, ErrorCode.CHANNEL_SMS);
+        }
+    }
+
+    private void validateEmail(String email) {
+        if (!StringUtils.hasText(email) || !EMAIL_PATTERN.matcher(email.trim()).matches()) {
+            throw AuthException.badRequest("邮箱格式不正确",
+                    ErrorCode.EMAIL_TARGET_INVALID, ErrorCode.CHANNEL_EMAIL);
+        }
+    }
+
+    public record CodeSendResult(String mockCode, boolean mock) {
     }
 }

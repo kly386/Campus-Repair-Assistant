@@ -1,5 +1,6 @@
 package com.example.campusrepair.controller;
 
+import com.example.campusrepair.security.RequirePermission;
 import com.example.campusrepair.service.DatabaseProbeService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -56,6 +57,7 @@ public class SystemController {
      * @return 读写分离开关与主、从库实例信息
      */
     @GetMapping("/db")
+    @RequirePermission("system:db:read")
     public Map<String, Object> db() {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("routingEnabled", routingEnabled);

@@ -1,38 +1,56 @@
 package com.example.campusrepair.config;
 
-/**
- * 当前登录用户上下文（线程绑定）
- *
- * @Description 拦截器写入，业务代码随时随地读取当前 userId/role；请求结束由拦截器清理。
- * @Author 开璐瑶
- * @Date 2026-11-10
- * @Version 1.0
- */
+import com.example.campusrepair.security.LoginPrincipal;
+
+import java.util.Set;
+
+/** 当前登录用户上下文（线程绑定），请求结束时由拦截器清理。 */
 public final class AuthContext {
 
-    private static final ThreadLocal<Long> USER_ID = new ThreadLocal<>();
-    private static final ThreadLocal<String> ROLE = new ThreadLocal<>();
+    private static final ThreadLocal<LoginPrincipal> PRINCIPAL = new ThreadLocal<>();
 
     private AuthContext() {
     }
 
-    public static void set(Long userId, String role) {
-        USER_ID.set(userId);
-        ROLE.set(role);
+    public static void set(LoginPrincipal principal) {
+        PRINCIPAL.set(principal);
     }
 
-    /** 当前用户ID（未登录场景下为 null，仅限已过拦截器的业务代码使用） */
+    public static LoginPrincipal principal() {
+        return PRINCIPAL.get();
+    }
+
     public static Long userId() {
-        return USER_ID.get();
+        LoginPrincipal principal = PRINCIPAL.get();
+        return principal == null ? null : principal.userId();
     }
 
-    /** 当前角色 */
-    public static String role() {
-        return ROLE.get();
+    public static String username() {
+        LoginPrincipal principal = PRINCIPAL.get();
+        return principal == null ? null : principal.username();
+    }
+
+    public static String sessionId() {
+        LoginPrincipal principal = PRINCIPAL.get();
+        return principal == null ? null : principal.sessionId();
+    }
+
+    public static Set<String> roles() {
+        LoginPrincipal principal = PRINCIPAL.get();
+        return principal == null ? Set.of() : principal.roles();
+    }
+
+    public static Set<String> permissions() {
+        LoginPrincipal principal = PRINCIPAL.get();
+        return principal == null ? Set.of() : principal.permissions();
+    }
+
+    public static boolean hasPermission(String permission) {
+        LoginPrincipal principal = PRINCIPAL.get();
+        return principal != null && principal.hasPermission(permission);
     }
 
     public static void clear() {
-        USER_ID.remove();
-        ROLE.remove();
+        PRINCIPAL.remove();
     }
 }

@@ -2,14 +2,7 @@ package com.example.campusrepair.dto;
 
 import lombok.Data;
 
-/**
- * 统一响应封装
- *
- * @Description 后端接口统一返回体（code/message/data）
- * @Author 开璐瑶
- * @Date 2026-09-22
- * @Version 1.0
- */
+/** 统一响应封装（code/message/data）。 */
 @Data
 public class ApiResponse<T> {
 
@@ -18,11 +11,7 @@ public class ApiResponse<T> {
     private T data;
 
     public static <T> ApiResponse<T> success(T data) {
-        ApiResponse<T> resp = new ApiResponse<>();
-        resp.code = 200;
-        resp.message = "success";
-        resp.data = data;
-        return resp;
+        return success("success", data);
     }
 
     public static <T> ApiResponse<T> success(String message, T data) {
@@ -34,9 +23,14 @@ public class ApiResponse<T> {
     }
 
     public static <T> ApiResponse<T> error(int code, String message) {
+        return error(code, message, null);
+    }
+
+    public static <T> ApiResponse<T> error(int code, String message, T data) {
         ApiResponse<T> resp = new ApiResponse<>();
         resp.code = code;
         resp.message = message;
+        resp.data = data;
         return resp;
     }
 }

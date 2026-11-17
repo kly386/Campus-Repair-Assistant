@@ -29,7 +29,7 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="submitting" @click="handleSubmit">提交报修</el-button>
+          <el-button v-permission="'order:create'" type="primary" :loading="submitting" @click="handleSubmit">提交报修</el-button>
         </el-form-item>
       </el-form>
     </el-card>

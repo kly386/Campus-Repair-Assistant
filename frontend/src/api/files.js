@@ -17,7 +17,7 @@ export function batchUpload(files, orderId) {
 export function initMultipart(fileName, orderId) {
   return http
     .post('/files/multipart/init', null, {
-      params: { fileName, ...(orderId == null ? {} : { orderId }) }
+      params: { fileName, ...(orderId === null ? {} : { orderId }) }
     })
     .then((r) => r.data);
 }
@@ -35,7 +35,7 @@ export function uploadChunk(uploadId, index, chunk, onProgress) {
 export function completeMultipart(uploadId, orderId) {
   return http
     .post(`/files/multipart/${uploadId}/complete`, null, {
-      params: orderId == null ? {} : { orderId }
+      params: orderId === null ? {} : { orderId }
     })
     .then((r) => r.data);
 }

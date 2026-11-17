@@ -1,11 +1,20 @@
 package com.example.campusrepair.controller;
 
+import com.example.campusrepair.config.AuthContext;
 import com.example.campusrepair.dto.ApiResponse;
+import com.example.campusrepair.dto.ClientInfo;
+import com.example.campusrepair.dto.LoginResult;
 import com.example.campusrepair.service.AuthCodeService;
 import com.example.campusrepair.service.AuthService;
 import com.example.campusrepair.service.RateLimitService;
+import com.example.campusrepair.service.WechatLoginService;
 import com.example.campusrepair.util.CaptchaGenerator;
+import com.example.campusrepair.util.RequestUtils;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,13 +29,10 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 登录接口（鉴权入口，全部放行勿加拦截）
+ * 统一登录入口。
  *
- * @Description 三种登录方式 + 图形验证码下发。
- *              反爬防线：登录类接口 RateLimit 10 次/分/IP；账密连续失败 5 次锁 10 分钟。
- * @Author 开璐瑶
- * @Date 2026-11-10
- * @Version 1.0
+ * <p>支持账号密码、Spug 短信、邮箱验证码、微信扫码四种方式。密码登录强制图形验证码；
+ * 所有登录入口按 IP 限流，短信/邮箱发送再按目标账号 60 秒冷却。</p>
  */
 @RestController
 @RequestMapping("/api/auth")
@@ -36,16 +42,13 @@ public class AuthController {
     private final AuthService authService;
     private final AuthCodeService authCodeService;
     private final RateLimitService rateLimitService;
+    private final WechatLoginService wechatLoginService;
 
-    // ================= 1. 图形验证码（账密登录用） =================
+    // ---------------- 图形验证码 ----------------
 
-    /**
-     * 下发图形验证码
-     *
-     * @return captchaId + 图片 data URI
-     */
     @GetMapping("/captcha")
-    public ApiResponse<Map<String, String>> captcha() {
+    public ApiResponse<Map<String, String>> captcha(HttpServletRequest request) {
+        rateLimitService.checkCaptcha(RequestUtils.clientIp(request));
         String code = CaptchaGenerator.randomCode();
         String captchaId = UUID.randomUUID().toString().replace("-", "");
         authCodeService.saveCaptcha(captchaId, code);
@@ -55,146 +58,210 @@ public class AuthController {
         return ApiResponse.success(data);
     }
 
+    // ---------------- 统一验证码发送 ----------------
+
     /**
-     * 账密登录（带图形验证码）
+     * 前端通过 PHONE / EMAIL 选择验证码发送渠道。
      */
-    @PostMapping("/login")
-    public ApiResponse<AuthService.LoginResult> login(@RequestBody PasswordLoginRequest req,
+    @PostMapping("/code/send")
+    public ApiResponse<Map<String, String>> sendCode(@Valid @RequestBody CodeSendRequest req,
                                                       HttpServletRequest request) {
-        String ip = clientIp(request);
-        checkRate("login:" + ip);
-        String loginKey = req.getUsername() != null ? req.getUsername() : ip;
-        if (authCodeService.isLoginLocked(loginKey)) {
-            return ApiResponse.error(429, "失败次数过多，请 10 分钟后再试");
-        }
-        try {
-            AuthService.LoginResult result = authService.loginByPassword(
-                    req.getUsername(), req.getPassword(), req.getCaptchaId(), req.getCaptchaCode(), loginKey);
-            return ApiResponse.success(result);
-        } catch (IllegalArgumentException e) {
-            int fails = authCodeService.recordLoginFail(loginKey);
-            int remain = AuthCodeService.MAX_LOGIN_FAIL;
-            return ApiResponse.error(401, e.getMessage() + "（" + fails + "/" + remain + "）");
-        }
-    }
-
-    // ================= 2. 手机短信验证码登录 =================
-
-    /**
-     * 发送短信验证码（模拟场景验证码将随响应返回，便于演示）
-     */
-    @PostMapping("/sms/send")
-    public ApiResponse<Map<String, String>> sendSms(@RequestBody SmsSendRequest req,
-                                                    HttpServletRequest request) {
-        checkRate("sms:" + clientIp(request));
-        String code = authService.sendSmsCode(req.getPhone());
+        String ip = RequestUtils.clientIp(request);
+        rateLimitService.checkCodeSend(req.getType(), req.getTarget(), ip);
+        AuthService.CodeSendResult result = authService.sendVerificationCode(req.getType(), req.getTarget());
         Map<String, String> data = new LinkedHashMap<>();
-        if (code != null) {
-            data.put("mockCode", code); // smsMock=true 才返回，生产模式无此字段
+        if (result.mockCode() != null) {
+            data.put("mockCode", result.mockCode());
         }
         return ApiResponse.success("验证码已发送", data);
     }
 
-    /**
-     * 短信验证码登录（未注册手机号自动开通学生账号）
-     */
-    @PostMapping("/sms/login")
-    public ApiResponse<AuthService.LoginResult> smsLogin(@RequestBody SmsLoginRequest req,
-                                                         HttpServletRequest request) {
-        checkRate("login:" + clientIp(request));
-        return ApiResponse.success(authService.loginBySms(req.getPhone(), req.getCode()));
+    // ---------------- 账号密码登录 ----------------
+
+    @PostMapping("/login")
+    public ApiResponse<LoginResult> login(@Valid @RequestBody PasswordLoginRequest req,
+                                          HttpServletRequest request) {
+        ClientInfo client = RequestUtils.clientInfo(request);
+        rateLimitService.checkLogin(client.ip());
+        return ApiResponse.success(authService.loginByPassword(
+                req.getUsername(), req.getPassword(), req.getCaptchaId(), req.getCaptchaCode(), client));
     }
 
-    // ================= 3. 微信扫码登录（模拟流程） =================
+    // ---------------- 短信登录 ----------------
 
-    /**
-     * 生成扫码二维码（模拟微信侧）
-     *
-     * @return uuid（前端拼成二维码轮询用） + 模拟跳转 url
-     */
-    @PostMapping("/wx/qrcode")
-    public ApiResponse<Map<String, String>> wxQrcode() {
-        String uuid = UUID.randomUUID().toString().replace("-", "");
-        authCodeService.initWxState(uuid);
+    @PostMapping("/sms/send")
+    public ApiResponse<Map<String, String>> sendSms(@Valid @RequestBody SmsSendRequest req,
+                                                     HttpServletRequest request) {
+        String ip = RequestUtils.clientIp(request);
+        rateLimitService.checkSmsSend(req.getPhone(), ip);
+        AuthService.CodeSendResult result = authService.sendSmsCode(req.getPhone());
         Map<String, String> data = new LinkedHashMap<>();
-        data.put("uuid", uuid);
-        data.put("url", "https://open.weixin.qq.com/mock/oauth2?state=" + uuid);
-        data.put("qrcodeContent", "MOCK-WX-LOGIN:" + uuid);
-        return ApiResponse.success(data);
+        if (result.mockCode() != null) {
+            data.put("mockCode", result.mockCode());
+        }
+        return ApiResponse.success("验证码已发送", data);
+    }
+
+    @PostMapping("/sms/login")
+    public ApiResponse<LoginResult> smsLogin(@Valid @RequestBody SmsLoginRequest req,
+                                             HttpServletRequest request) {
+        ClientInfo client = RequestUtils.clientInfo(request);
+        rateLimitService.checkLogin(client.ip());
+        return ApiResponse.success(authService.loginBySms(req.getPhone(), req.getCode(), client));
+    }
+
+    // ---------------- 邮箱登录 ----------------
+
+    @PostMapping("/email/send")
+    public ApiResponse<Map<String, String>> sendEmail(@Valid @RequestBody EmailSendRequest req,
+                                                       HttpServletRequest request) {
+        String ip = RequestUtils.clientIp(request);
+        rateLimitService.checkEmailSend(req.getEmail(), ip);
+        AuthService.CodeSendResult result = authService.sendEmailCode(req.getEmail());
+        Map<String, String> data = new LinkedHashMap<>();
+        if (result.mockCode() != null) {
+            data.put("mockCode", result.mockCode());
+        }
+        return ApiResponse.success("验证码已发送", data);
+    }
+
+    @PostMapping("/email/login")
+    public ApiResponse<LoginResult> emailLogin(@Valid @RequestBody EmailLoginRequest req,
+                                               HttpServletRequest request) {
+        ClientInfo client = RequestUtils.clientInfo(request);
+        rateLimitService.checkLogin(client.ip());
+        return ApiResponse.success(authService.loginByEmail(req.getEmail(), req.getCode(), client));
+    }
+
+    // ---------------- 微信扫码 ----------------
+
+    @PostMapping("/wx/qrcode")
+    public ApiResponse<Map<String, Object>> wxQrcode(HttpServletRequest request) {
+        rateLimitService.checkCaptcha(RequestUtils.clientIp(request));
+        return ApiResponse.success(wechatLoginService.createQrSession());
     }
 
     /**
-     * 轮询扫码状态：WAITING → SCANNED → CONFIRMED(token) / EXPIRED
+     * 轮询扫码状态。确认后直接返回 token 字段，兼容旧前端；
+     * 同时返回完整登录信息（permissions、menus、refreshToken）。
      */
     @GetMapping("/wx/state")
-    public ApiResponse<Map<String, Object>> wxState(@RequestParam String uuid) {
-        String state = authCodeService.peekWxState(uuid);
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("status", state == null ? "EXPIRED" : state);
-        if (AuthCodeService.WX_CONFIRM.equals(state)) {
-            AuthService.LoginResult result = authService.finalizeWxLogin(uuid);
-            if (result != null) {
-                data.put("token", result.token());
-                data.put("username", result.username());
-                data.put("realName", result.realName());
-                data.put("role", result.role());
-            }
+    public ApiResponse<Map<String, Object>> wxState(@RequestParam String uuid,
+                                                     HttpServletRequest request) {
+        Map<String, Object> data = wechatLoginService.poll(uuid);
+        if (AuthCodeService.WX_CONFIRMED.equals(data.get("status"))) {
+            LoginResult result = authService.finalizeWxLogin(uuid, RequestUtils.clientInfo(request));
+            data.put("status", AuthCodeService.WX_CONFIRMED);
+            data.put("token", result.token());
+            data.put("accessToken", result.accessToken());
+            data.put("refreshToken", result.refreshToken());
+            data.put("tokenType", result.tokenType());
+            data.put("expiresIn", result.expiresIn());
+            data.put("userId", result.userId());
+            data.put("username", result.username());
+            data.put("realName", result.realName());
+            data.put("role", result.role());
+            data.put("roles", result.roles());
+            data.put("permissions", result.permissions());
+            data.put("menus", result.menus());
         }
         return ApiResponse.success(data);
     }
 
-    /**
-     * 【答辩演示专用】模拟手机端动作：scan=模拟扫码，confirm=模拟确认登录
-     */
+    /** 微信开放平台授权回调：code 换取 openid 后唤醒前端轮询。 */
+    @GetMapping("/wx/callback")
+    public ApiResponse<Void> wxCallback(@RequestParam String code, @RequestParam String state) {
+        wechatLoginService.handleCallback(state, code);
+        return ApiResponse.success("微信授权成功，请返回登录页", null);
+    }
+
+    /** 答辩演示：模拟手机端扫码。 */
     @PostMapping("/wx/mock/scan")
     public ApiResponse<Void> wxMockScan(@RequestParam String uuid) {
-        authCodeService.markWxScanned(uuid);
+        wechatLoginService.markScanned(uuid);
         return ApiResponse.success(null);
     }
 
+    /** 答辩演示：模拟手机端确认登录。 */
     @PostMapping("/wx/mock/confirm")
     public ApiResponse<Void> wxMockConfirm(@RequestParam String uuid) {
-        authCodeService.markWxConfirmed(uuid);
+        wechatLoginService.markConfirmed(uuid);
         return ApiResponse.success(null);
+    }
+
+    // ---------------- 刷新与退出 ----------------
+
+    @PostMapping("/refresh")
+    public ApiResponse<LoginResult> refresh(@Valid @RequestBody RefreshRequest req,
+                                             HttpServletRequest request) {
+        return ApiResponse.success(authService.refresh(
+                req.getRefreshToken(), RequestUtils.clientInfo(request)));
+    }
+
+    @PostMapping("/logout")
+    public ApiResponse<Void> logout(HttpServletRequest request) {
+        authService.logout(AuthContext.sessionId(), AuthContext.userId(),
+                RequestUtils.clientInfo(request));
+        return ApiResponse.success("已退出登录", null);
     }
 
     // ---------------- 请求体 ----------------
 
-    /** 账密登录请求 */
+    @Data
+    public static class CodeSendRequest {
+        @NotBlank(message = "验证码类型不能为空")
+        private String type;
+        @NotBlank(message = "接收目标不能为空")
+        private String target;
+    }
+
     @Data
     public static class PasswordLoginRequest {
+        @NotBlank(message = "用户名不能为空")
         private String username;
+        @NotBlank(message = "密码不能为空")
         private String password;
+        @NotBlank(message = "captchaId 不能为空")
         private String captchaId;
+        @NotBlank(message = "图形验证码不能为空")
         private String captchaCode;
     }
 
-    /** 短信发送请求 */
     @Data
     public static class SmsSendRequest {
+        @NotBlank(message = "手机号不能为空")
+        @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式不正确")
         private String phone;
     }
 
-    /** 短信登录请求 */
     @Data
     public static class SmsLoginRequest {
+        @NotBlank(message = "手机号不能为空")
+        @Pattern(regexp = "^1[3-9]\\d{9}$", message = "手机号格式不正确")
         private String phone;
+        @NotBlank(message = "验证码不能为空")
         private String code;
     }
 
-    private void checkRate(String key) {
-        if (!rateLimitService.tryAcquire(key, RateLimitService.LIMIT_LOGIN)) {
-            throw new RateLimitException();
-        }
+    @Data
+    public static class EmailSendRequest {
+        @NotBlank(message = "邮箱不能为空")
+        @Email(message = "邮箱格式不正确")
+        private String email;
     }
 
-    private String clientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        return xff != null ? xff.split(",")[0].trim() :
-                request.getRemoteAddr() != null ? request.getRemoteAddr() : "unknown";
+    @Data
+    public static class EmailLoginRequest {
+        @NotBlank(message = "邮箱不能为空")
+        @Email(message = "邮箱格式不正确")
+        private String email;
+        @NotBlank(message = "验证码不能为空")
+        private String code;
     }
 
-    /** 限流受控异常（统一由异常处理器输出 429） */
-    public static class RateLimitException extends RuntimeException {
+    @Data
+    public static class RefreshRequest {
+        @NotBlank(message = "刷新 Token 不能为空")
+        private String refreshToken;
     }
 }

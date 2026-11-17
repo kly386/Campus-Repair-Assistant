@@ -1,6 +1,7 @@
 package com.example.campusrepair.controller;
 
 import com.example.campusrepair.entity.FileObject;
+import com.example.campusrepair.security.RequirePermission;
 import com.example.campusrepair.service.FileStorageService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +38,7 @@ public class FileController {
 
     /** 第 1 步：初始化，拿 uploadId */
     @PostMapping("/multipart/init")
+    @RequirePermission("file:upload")
     public Map<String, String> initMultipart(@RequestParam String fileName,
                                              @RequestParam(required = false) Long orderId) {
         return fileStorageService.initMultipartUpload(fileName, orderId);
@@ -44,6 +46,7 @@ public class FileController {
 
     /** 第 2 步：逐片上传（chunkIndex 从 1 开始） */
     @PostMapping("/multipart/{uploadId}/{chunkIndex}")
+    @RequirePermission("file:upload")
     public Map<String, Object> uploadChunk(@PathVariable String uploadId,
                                            @PathVariable int chunkIndex,
                                            @RequestParam MultipartFile chunk) {
@@ -52,6 +55,7 @@ public class FileController {
 
     /** 第 3 步：合并分片，返回元数据 */
     @PostMapping("/multipart/{uploadId}/complete")
+    @RequirePermission("file:upload")
     public FileObject completeMultipart(@PathVariable String uploadId,
                                         @RequestParam(required = false) Long orderId) {
         return fileStorageService.completeMultipartUpload(uploadId, orderId);
@@ -64,6 +68,7 @@ public class FileController {
      * curl -F "files=@1.jpg" -F "files=@2.jpg" http://localhost:8080/api/files/batch-upload
      */
     @PostMapping("/batch-upload")
+    @RequirePermission("file:upload")
     public List<FileObject> batchUpload(@RequestParam("files") List<MultipartFile> files,
                                         @RequestParam(required = false) Long orderId) {
         if (files == null || files.isEmpty()) {
@@ -76,18 +81,21 @@ public class FileController {
 
     /** 工单附件列表（走从库） */
     @GetMapping("/order/{orderId}")
+    @RequirePermission("file:read")
     public List<FileObject> listByOrder(@PathVariable Long orderId) {
         return fileStorageService.listByOrder(orderId);
     }
 
     /** 单文件：返回临时签名 URL，前端直接 GET 该 URL 下载/预览 */
     @GetMapping("/{fileId}/url")
+    @RequirePermission("file:read")
     public Map<String, String> signedUrl(@PathVariable Long fileId) {
         return fileStorageService.getSignedUrl(fileId);
     }
 
     /** 批量下载：多个文件打包 ZIP 流式返回。?ids=1,2,3 */
     @GetMapping("/zip")
+    @RequirePermission("file:read")
     public void downloadZip(@RequestParam String ids, HttpServletResponse response) {
         List<Long> idList = List.of(ids.split(",")).stream()
                 .map(String::trim)

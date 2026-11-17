@@ -1,64 +1,111 @@
 package com.example.campusrepair.config;
 
-import io.jsonwebtoken.Claims;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
-import org.springframework.web.servlet.HandlerInterceptor;
-
+import com.example.campusrepair.dto.ApiResponse;
+import com.example.campusrepair.entity.User;
+import com.example.campusrepair.exception.AuthException;
+import com.example.campusrepair.repository.UserRepository;
+import com.example.campusrepair.security.LoginPrincipal;
+import com.example.campusrepair.security.RequirePermission;
+import com.example.campusrepair.service.AccountLockService;
+import com.example.campusrepair.service.PermissionService;
+import com.example.campusrepair.service.TokenSessionService;
 import com.example.campusrepair.util.JwtUtil;
-
+import com.example.campusrepair.util.RequestUtils;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Component;
+import org.springframework.web.method.HandlerMethod;
+import org.springframework.web.servlet.HandlerInterceptor;
+
+import java.nio.charset.StandardCharsets;
 
 /**
- * 登录态拦截器（鉴权核心）
+ * 统一身份认证与接口级 RBAC 拦截器。
  *
- * @Description 业务接口必须携带有效 Authorization: Bearer <JWT>。
- *              校验通过后把 userId/role 放进请求与 AuthContext，供业务代码获取当前用户，
- *              也是后续 RBAC @RequirePermission 的前置环节。
- * @Author 开璐瑶
- * @Date 2026-11-10
- * @Version 1.0
+ * <p>每个受保护请求依次执行：JWT 签名校验 -> 服务端会话/jti 校验 -> 客户端指纹校验
+ * -> 账号锁定/禁用校验 -> 实时加载角色权限 -> {@code @RequirePermission} 校验。
+ * 因此前端隐藏按钮不是安全边界，直接调用接口同样会被后端拦截。</p>
  */
 @Component
 @RequiredArgsConstructor
 public class AuthInterceptor implements HandlerInterceptor {
 
     private final JwtUtil jwtUtil;
+    private final TokenSessionService tokenSessionService;
+    private final AccountLockService accountLockService;
+    private final PermissionService permissionService;
+    private final UserRepository userRepository;
+    private final ObjectMapper objectMapper;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
             throws Exception {
-        // OPTIONS 预检直接放行（CORS）
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             return true;
         }
-        String header = request.getHeader("Authorization");
-        if (header == null || !header.startsWith("Bearer ")) {
-            reject(response, 401, "未登录或会话已过期");
+        try {
+            Claims claims = parseBearer(request);
+            TokenSessionService.CurrentSession session = tokenSessionService.validateAccess(
+                    claims, RequestUtils.clientInfo(request).fingerprint());
+            User user = userRepository.findByIdAndIsDeleted(session.userId(), 0)
+                    .orElseThrow(() -> AuthException.unauthorized("用户不存在或已删除"));
+            accountLockService.assertLoginAllowed(user);
+
+            PermissionService.AccessProfile profile = permissionService.loadProfile(user.getId());
+            LoginPrincipal principal = new LoginPrincipal(user.getId(), user.getUsername(),
+                    session.sessionId(), profile.roles(), profile.permissions());
+            AuthContext.set(principal);
+            checkPermission(handler, principal);
+            return true;
+        } catch (AuthException e) {
+            writeError(response, e);
             return false;
         }
-        Claims claims = jwtUtil.parse(header.substring(7));
-        if (claims == null) {
-            reject(response, 401, "登录已失效，请重新登录");
-            return false;
-        }
-        // 供 Controller 直接读取
-        request.setAttribute("userId", Long.valueOf(claims.getSubject()));
-        request.setAttribute("role", (String) claims.get("role"));
-        AuthContext.set(Long.valueOf(claims.getSubject()), (String) claims.get("role"));
-        return true;
     }
 
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response,
                                 Object handler, Exception ex) {
-        AuthContext.clear(); // 防 ThreadLocal 内存泄漏
+        AuthContext.clear();
     }
 
-    private void reject(HttpServletResponse response, int code, String message) throws Exception {
-        response.setStatus(code);
-        response.setContentType("application/json;charset=UTF-8");
-        response.getWriter().write("{\"code\":" + code + ",\"message\":\"" + message + "\",\"data\":null}");
+    private Claims parseBearer(HttpServletRequest request) {
+        String header = request.getHeader("Authorization");
+        if (header == null || !header.startsWith("Bearer ")) {
+            throw AuthException.unauthorized("未登录或会话已过期");
+        }
+        Claims claims = jwtUtil.parse(header.substring(7).trim());
+        if (claims == null) {
+            throw AuthException.unauthorized("登录已失效，请重新登录");
+        }
+        return claims;
+    }
+
+    private void checkPermission(Object handler, LoginPrincipal principal) {
+        if (!(handler instanceof HandlerMethod method)) {
+            return;
+        }
+        RequirePermission permission = AnnotatedElementUtils.findMergedAnnotation(
+                method.getMethod(), RequirePermission.class);
+        if (permission == null) {
+            permission = AnnotatedElementUtils.findMergedAnnotation(
+                    method.getBeanType(), RequirePermission.class);
+        }
+        if (permission != null && !principal.hasPermission(permission.value())) {
+            throw AuthException.forbidden("无权访问该接口：" + permission.value());
+        }
+    }
+
+    private void writeError(HttpServletResponse response, AuthException e) throws Exception {
+        response.setStatus(e.getStatus().value());
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        objectMapper.writeValue(response.getWriter(),
+                ApiResponse.error(e.getCode(), e.getMessage(), e.getData()));
     }
 }

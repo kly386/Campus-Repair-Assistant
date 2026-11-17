@@ -2,12 +2,15 @@ import { createApp } from 'vue';
 import ElementPlus from 'element-plus';
 import 'element-plus/dist/index.css';
 import App from './App.vue';
-import router from './router';
-import { bindRouter } from './api/http';
+import router, { rebuildRoutes } from './router';
+import { bindRouteRebuilder, bindRouter } from './api/http';
+import permissionDirective from './directives/permission';
 
-bindRouter(router); // 供 axios 401 时跳转登录页
+bindRouter(router);
+bindRouteRebuilder(rebuildRoutes);
 
 const app = createApp(App);
 app.use(ElementPlus);
 app.use(router);
+app.directive('permission', permissionDirective);
 app.mount('#app');

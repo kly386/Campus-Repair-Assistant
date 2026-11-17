@@ -1,6 +1,7 @@
 package com.example.campusrepair.controller;
 
 import com.example.campusrepair.entity.RepairOrder;
+import com.example.campusrepair.security.RequirePermission;
 import com.example.campusrepair.service.RepairOrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -23,31 +24,37 @@ public class RepairOrderController {
     private final RepairOrderService repairOrderService;
 
     @PostMapping
+    @RequirePermission("order:create")
     public RepairOrder create(@RequestBody RepairOrder order) {
         return repairOrderService.createOrder(order);
     }
 
     @PutMapping
+    @RequirePermission("order:update")
     public RepairOrder update(@RequestBody RepairOrder order) {
         return repairOrderService.updateOrder(order);
     }
 
     @GetMapping("/{id}")
+    @RequirePermission("order:read")
     public RepairOrder getById(@PathVariable Long id) {
         return repairOrderService.findById(id);
     }
 
     @GetMapping("/student/{studentId}")
+    @RequirePermission("order:read")
     public List<RepairOrder> getByStudent(@PathVariable Long studentId) {
         return repairOrderService.findByStudentId(studentId);
     }
 
     @GetMapping("/status/{status}")
+    @RequirePermission("order:read")
     public List<RepairOrder> getByStatus(@PathVariable String status) {
         return repairOrderService.findByStatus(status);
     }
 
     @DeleteMapping("/{id}")
+    @RequirePermission("order:delete")
     public void delete(@PathVariable Long id) {
         repairOrderService.deleteById(id);
     }
