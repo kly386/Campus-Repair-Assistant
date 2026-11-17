@@ -21,7 +21,7 @@ html, body, #app {
   min-height: 100%;
 }
 body {
-  font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Source Han Sans SC', 'Helvetica Neue', Arial, sans-serif;
   color: #304d66;
   background: #f4f9fe;
   -webkit-font-smoothing: antialiased;
