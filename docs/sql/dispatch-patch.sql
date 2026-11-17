@@ -68,6 +68,12 @@ WHERE u.`username` IN ('demo_worker1', 'demo_worker2') AND r.`code` = 'WORKER'
   AND NOT EXISTS (SELECT 1 FROM `user_role` ur
                   WHERE ur.`user_id` = u.`id` AND ur.`role_id` = r.`id`);
 
+INSERT INTO `user_role` (`user_id`, `role_id`)
+SELECT u.`id`, r.`id` FROM `user` u, `role` r
+WHERE u.`username` IN ('demo_stu1', 'demo_stu2', 'demo_stu3') AND r.`code` = 'STUDENT'
+  AND NOT EXISTS (SELECT 1 FROM `user_role` ur
+                  WHERE ur.`user_id` = u.`id` AND ur.`role_id` = r.`id`);
+
 -- ---------------------------------------------------------------------
 -- 4. 师傅端工作台菜单（仅 WORKER 角色；ADMIN 不需要）
 -- ---------------------------------------------------------------------

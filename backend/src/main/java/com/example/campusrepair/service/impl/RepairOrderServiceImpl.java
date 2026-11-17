@@ -2,6 +2,8 @@ package com.example.campusrepair.service.impl;
 
 import com.example.campusrepair.datasource.Slave;
 import com.example.campusrepair.entity.RepairOrder;
+import com.example.campusrepair.mq.OrderMessage;
+import com.example.campusrepair.mq.OrderMessageQueue;
 import com.example.campusrepair.repository.RepairOrderRepository;
 import com.example.campusrepair.service.RepairOrderService;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +25,7 @@ import java.util.List;
 public class RepairOrderServiceImpl implements RepairOrderService {
 
     private final RepairOrderRepository repairOrderRepository;
+    private final OrderMessageQueue orderMessageQueue;
 
     @Override
     public RepairOrder createOrder(RepairOrder order) {
@@ -31,7 +34,12 @@ public class RepairOrderServiceImpl implements RepairOrderService {
         if (order.getStatus() == null) {
             order.setStatus("SUBMITTED");
         }
-        return repairOrderRepository.save(order);
+        RepairOrder saved = repairOrderRepository.save(order);
+
+        // 消息队列：提交即发消息立即返回，自动派单由后台消费者异步完成（异步解耦 + 削峰）。
+        // 派单失败不影响提交结果，工单仍保留在 SUBMITTED 待派单池，可手动批量派单兜底。
+        orderMessageQueue.send(new OrderMessage(OrderMessage.ORDER_SUBMITTED, saved.getId()));
+        return saved;
     }
 
     @Override
