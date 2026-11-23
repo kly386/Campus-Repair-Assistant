@@ -17,15 +17,20 @@
 <script setup>
 import {
   Calendar,
+  Collection,
+  DataAnalysis,
   FirstAidKit,
   Folder,
   House,
   Key,
   Menu,
+  Reading,
   Setting,
+  Suitcase,
   Tickets,
   Tools,
-  User
+  User,
+  Van
 } from '@element-plus/icons-vue';
 
 defineOptions({ name: 'SidebarMenu' });
@@ -40,7 +45,12 @@ const iconMap = {
   Setting,
   User,
   Key,
-  Tools
+  Tools,
+  Collection,
+  Reading,
+  Van,
+  Suitcase,
+  DataAnalysis
 };
 
 function iconOf(name) {

@@ -8,8 +8,12 @@
         </el-form-item>
         <el-form-item label="上传照片">
           <input ref="fileInput" type="file" multiple accept="image/*" @change="onFileChange" />
-          <div v-if="files.length" style="margin-top: 10px">
-            <div v-for="(f, idx) in files" :key="idx">{{ f.name }} ({{ formatSize(f.size) }})</div>
+          <div v-if="files.length" class="file-list">
+            <div v-for="(f, idx) in files" :key="idx" class="file-item">
+              <span class="file-name">{{ f.name }} ({{ formatSize(f.size) }})</span>
+              <el-button link type="danger" @click="removeFile(idx)">移除</el-button>
+            </div>
+            <el-button link type="info" @click="clearFiles">清空已选</el-button>
           </div>
         </el-form-item>
         <el-form-item label="AI 解析">
@@ -135,6 +139,16 @@ function onFileChange(e) {
   files.value = Array.from(e.target.files || [])
 }
 
+function removeFile(idx) {
+  files.value = files.value.filter((_, i) => i !== idx)
+  if (files.value.length === 0 && fileInput.value) fileInput.value.value = ''
+}
+
+function clearFiles() {
+  files.value = []
+  if (fileInput.value) fileInput.value.value = ''
+}
+
 function formatSize(bytes) {
   if (bytes == null) return '-'
   if (bytes > 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB'
@@ -232,5 +246,18 @@ function reset() {
   margin-left: 12px;
   font-size: 12px;
   color: #909399;
+}
+.file-list {
+  margin-top: 10px;
+}
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.file-name {
+  flex: 1;
+  word-break: break-all;
 }
 </style>

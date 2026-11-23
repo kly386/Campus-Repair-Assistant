@@ -2,8 +2,8 @@
 USE campus_repair;
 
 INSERT INTO permission (code, name, type, parent_id, route_path, component, icon, sort_no, is_deleted, gmt_create, gmt_modified)
-VALUES ('menu:knowledge', '知识库审核', 'MENU', NULL, '/knowledge-review', 'KnowledgeReview', 'Reading', 6, 0, NOW(), NOW())
-ON DUPLICATE KEY UPDATE route_path = VALUES(route_path), component = VALUES(component);
+VALUES ('menu:knowledge', '知识管理', 'MENU', NULL, '/knowledge', 'Knowledge', 'Collection', 7, 0, NOW(), NOW())
+ON DUPLICATE KEY UPDATE route_path = VALUES(route_path), component = VALUES(component), name = VALUES(name), icon = VALUES(icon), sort_no = VALUES(sort_no);
 
 SET @menu_id = (SELECT id FROM permission WHERE code = 'menu:knowledge' AND type = 'MENU' LIMIT 1);
 
