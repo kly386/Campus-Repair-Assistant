@@ -10,7 +10,7 @@ import java.util.List;
  *
  * @Description 历史快照只增不改，仅提供按知识条目倒序查询与按 ID 精确查找
  *              （回滚时取快照）。不提供删除/更新方法——历史必须可追溯。
- * @Author 开璐瑶
+ * @Author 闵娟
  * @Date 2026-11-17
  * @Version 1.0
  */

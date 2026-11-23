@@ -166,19 +166,22 @@ CREATE TABLE IF NOT EXISTS `knowledge_history` (
 -- 9. 自助诊断会话表 diagnosis_session（RAG 问答记录）
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS `diagnosis_session` (
-    `id`            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '会话ID',
-    `user_id`       BIGINT UNSIGNED NOT NULL COMMENT '提问学生ID(逻辑关联user.id)',
-    `question`      VARCHAR(500) NOT NULL COMMENT '问题',
-    `answer`        TEXT         DEFAULT NULL COMMENT 'RAG返回的答案',
-    `category_id`   BIGINT UNSIGNED DEFAULT NULL COMMENT '识别到的故障类别ID',
-    `matched_kb_id` BIGINT UNSIGNED DEFAULT NULL COMMENT '命中知识条ID(逻辑关联knowledge_base.id)',
-    `similarity`    DECIMAL(4,3) DEFAULT NULL COMMENT '检索相似度(0~1)',
-    `is_solved`     TINYINT(1) UNSIGNED NOT NULL DEFAULT 0 COMMENT '是否自助解决: 1是/0否',
-    `gmt_create`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '提问时间',
-    `gmt_modified`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `id`              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '会话ID',
+    `user_id`         BIGINT UNSIGNED NOT NULL COMMENT '提问学生ID(逻辑关联user.id)',
+    `conversation_id` VARCHAR(64)     DEFAULT NULL COMMENT '多轮对话ID(前端生成,同一对话共用)',
+    `question`        VARCHAR(500)    NOT NULL COMMENT '问题',
+    `answer`          TEXT            DEFAULT NULL COMMENT 'RAG返回的答案',
+    `category_id`     BIGINT UNSIGNED DEFAULT NULL COMMENT '识别到的故障类别ID',
+    `matched_kb_id`   BIGINT UNSIGNED DEFAULT NULL COMMENT '命中知识条ID(逻辑关联knowledge_base.id)',
+    `emergency_level` VARCHAR(16)     DEFAULT 'NORMAL' COMMENT '诊断结论紧急等级: HIGH/NORMAL',
+    `similarity`      DECIMAL(4,3)    DEFAULT NULL COMMENT '检索相似度(0~1)',
+    `is_solved`       TINYINT(1) UNSIGNED DEFAULT NULL COMMENT '是否自助解决: NULL未反馈/0未解决/1已解决',
+    `gmt_create`      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '提问时间',
+    `gmt_modified`    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     CONSTRAINT `pk_id` PRIMARY KEY (`id`),
     KEY `idx_user` (`user_id`),
-    KEY `idx_kb` (`matched_kb_id`)
+    KEY `idx_kb` (`matched_kb_id`),
+    KEY `idx_conversation` (`conversation_id`, `user_id`, `gmt_create`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='自助诊断会话表';
 
 -- -----------------------------------------------------

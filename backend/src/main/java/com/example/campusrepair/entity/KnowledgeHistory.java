@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
  *              注意：只存内容快照，不建与 KnowledgeBase 的 JPA 关联映射，
  *              避免 cascade 误删历史（历史必须只增不改）。
  *              对应 knowledge_history 表。
- * @Author 开璐瑶
+ * @Author 闵娟
  * @Date 2026-11-17
  * @Version 1.0
  */

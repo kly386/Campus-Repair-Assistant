@@ -10,6 +10,7 @@ import com.example.campusrepair.entity.KnowledgeHistory;
 import com.example.campusrepair.repository.DiagnosisSessionRepository;
 import com.example.campusrepair.repository.KnowledgeBaseRepository;
 import com.example.campusrepair.repository.KnowledgeHistoryRepository;
+import com.example.campusrepair.service.DiagnosisRules;
 import com.example.campusrepair.service.EmbeddingService;
 import com.example.campusrepair.service.KnowledgeService;
 import com.example.campusrepair.util.CosineSimilarity;
@@ -22,7 +23,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -31,7 +37,7 @@ import java.util.Set;
  * @Description 新增/编辑（写历史快照）/审核四态流转/回滚/软删/浏览/检索/
  *              helpful 原子累加。检索走 LIKE 关键词匹配（阶段二换向量化时
  *              仅替换本类实现，接口签名不变）。
- * @Author 开璐瑶
+ * @Author 闵娟
  * @Date 2026-11-17
  * @Version 1.0
  */
@@ -46,8 +52,29 @@ public class KnowledgeServiceImpl implements KnowledgeService {
     /** RAG 检索最多返回的命中条目数 */
     private static final int TOP_K = 3;
 
+    /**
+     * LIKE 降级时的口语同义词：学生不会用"忽冷忽热"这种标准词。
+     * 向量服务可用时不会走这里；只在向量不可用时保证常见口语仍能命中种子条目。
+     */
+    private static final Map<String, List<String>> COLLOQUIAL_KEYWORDS;
+
+    static {
+        // 顺序有意义：先按症状命中，再按设备命中，避免"热水器"把"不加热"顶成 Top-1
+        Map<String, List<String>> synonyms = new LinkedHashMap<>();
+        synonyms.put("忽上忽下", List.of("忽冷忽热", "水温"));
+        synonyms.put("忽高忽低", List.of("忽冷忽热", "水温"));
+        synonyms.put("一会烫", List.of("忽冷忽热", "水温"));
+        synonyms.put("一会儿烫", List.of("忽冷忽热", "水温"));
+        synonyms.put("一会凉", List.of("忽冷忽热", "水温"));
+        synonyms.put("一会儿凉", List.of("忽冷忽热", "水温"));
+        synonyms.put("冷热", List.of("忽冷忽热"));
+        synonyms.put("洗澡", List.of("热水器", "水温"));
+        synonyms.put("淋浴", List.of("淋浴", "水温"));
+        COLLOQUIAL_KEYWORDS = Collections.unmodifiableMap(synonyms);
+    }
+
     /** 向量检索最低相似度阈值（可经 rag.min-similarity 配置） */
-    @org.springframework.beans.factory.annotation.Value("${rag.min-similarity:0.35}")
+    @org.springframework.beans.factory.annotation.Value("${rag.min-similarity:0.6}")
     private double minSimilarity;
 
     private final KnowledgeBaseRepository knowledgeBaseRepository;
@@ -183,7 +210,7 @@ public class KnowledgeServiceImpl implements KnowledgeService {
     /* ---------- 自助诊断（RAG 问答） ---------- */
 
     @Override
-    public DiagnosisResult ask(Long userId, String question) {
+    public DiagnosisResult ask(Long userId, String question, String conversationId) {
         String q = question == null ? "" : question.trim();
         if (q.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "问题不能为空");
@@ -206,23 +233,32 @@ public class KnowledgeServiceImpl implements KnowledgeService {
         } else {
             DiagnosisResult.Match top = matches.get(0);
             result.setAnswer(top.getAnswer());
+            result.setCategoryId(top.getCategoryId());
         }
         result.setMatches(matches);
+        result.setConversationId(conversationId);
+        // 紧急等级由规则推导，落库和流式回答共用同一个判断，避免前后矛盾
+        String emergencyLevel = DiagnosisRules.emergencyLevel(DiagnosisRules.isEmergency(q));
+        result.setEmergencyLevel(emergencyLevel);
 
         // 第二步：问答记录落库（diagnosis_session），形成数据闭环
         DiagnosisSession session = new DiagnosisSession();
         session.setUserId(userId);
+        session.setConversationId(conversationId);
         session.setQuestion(q);
         session.setAnswer(result.getAnswer());
+        session.setEmergencyLevel(emergencyLevel);
         if (!matches.isEmpty()) {
             DiagnosisResult.Match top = matches.get(0);
             session.setMatchedKbId(top.getId());
+            session.setCategoryId(top.getCategoryId());
             if (top.getSimilarity() != null) {
                 session.setSimilarity(java.math.BigDecimal.valueOf(top.getSimilarity())
                         .setScale(3, java.math.RoundingMode.HALF_UP));
             }
         }
-        session.setIsSolved(false);
+        // NULL = 未反馈；只有用户点了"解决了/没解决"才写 1/0，解决率分母据此统计
+        session.setIsSolved(null);
         session.setGmtCreate(LocalDateTime.now());
         session.setGmtModified(LocalDateTime.now());
         DiagnosisSession saved = diagnosisSessionRepository.save(session);
@@ -270,10 +306,63 @@ public class KnowledgeServiceImpl implements KnowledgeService {
                 .toList();
     }
 
-    /** LIKE 降级检索：关键词匹配 Top-K，无相似度概念 */
+    /** LIKE 降级检索：原文 → 口语同义词 → 种子关键词反查，逐级兜底 */
     private List<DiagnosisResult.Match> likeSearch(String q) {
-        return knowledgeBaseRepository.searchApproved(q).stream()
+        List<DiagnosisResult.Match> direct = searchMatches(q);
+        if (!direct.isEmpty()) {
+            return direct.stream().limit(TOP_K).toList();
+        }
+        String lower = q.toLowerCase();
+        Map<Long, DiagnosisResult.Match> found = new LinkedHashMap<>();
+        COLLOQUIAL_KEYWORDS.forEach((phrase, keywords) -> {
+            if (lower.contains(phrase)) {
+                for (String keyword : keywords) {
+                    for (DiagnosisResult.Match m : searchMatches(keyword)) {
+                        found.putIfAbsent(m.getId(), m);
+                    }
+                }
+            }
+        });
+        if (!found.isEmpty()) {
+            return found.values().stream().limit(TOP_K).toList();
+        }
+        // 学生常写"宿舍跳闸了怎么办"这种短句，整句 LIKE 匹配不到，
+        // 但种子 keyword 里的"跳闸"就包含在问题里，反查一次即可命中。
+        return keywordReverseSearch(q);
+    }
+
+    /** 用知识条目自己的 keyword 去比对问题文本，命中数多的排前面 */
+    private List<DiagnosisResult.Match> keywordReverseSearch(String q) {
+        String lower = q.toLowerCase();
+        return knowledgeBaseRepository.browseApproved(null).stream()
+                .map(kb -> Map.entry(kb, countKeywordHits(kb.getKeyword(), lower)))
+                .filter(entry -> entry.getValue() > 0)
+                .sorted(Comparator
+                        .<Map.Entry<KnowledgeBase, Integer>>comparingInt(Map.Entry::getValue).reversed()
+                        .thenComparing(entry -> entry.getKey().getHelpful() == null
+                                ? 0L : entry.getKey().getHelpful().longValue(), Comparator.reverseOrder()))
                 .limit(TOP_K)
+                .map(entry -> toMatch(entry.getKey(), null))
+                .toList();
+    }
+
+    private int countKeywordHits(String keywordField, String lowerQuestion) {
+        if (keywordField == null || keywordField.isBlank()) {
+            return 0;
+        }
+        int hits = 0;
+        for (String token : keywordField.split("[,，、\\s]+")) {
+            String normalized = token.trim().toLowerCase();
+            // 单字词（如"水"）区分度太低，不拿来反查
+            if (normalized.length() >= 2 && lowerQuestion.contains(normalized)) {
+                hits++;
+            }
+        }
+        return hits;
+    }
+
+    private List<DiagnosisResult.Match> searchMatches(String query) {
+        return knowledgeBaseRepository.searchApproved(query).stream()
                 .map(kb -> toMatch(kb, null))
                 .toList();
     }
@@ -285,6 +374,7 @@ public class KnowledgeServiceImpl implements KnowledgeService {
         match.setQuestion(kb.getQuestion());
         match.setAnswer(kb.getAnswer());
         match.setHelpful(kb.getHelpful() == null ? 0L : kb.getHelpful().longValue());
+        match.setCategoryId(kb.getCategoryId());
         match.setSimilarity(similarity);
         return match;
     }

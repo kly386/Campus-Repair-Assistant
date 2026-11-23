@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
  *              工单沉淀（ORDER，阶段三接入）；审核通过（APPROVED）后对学生可见。
  *              embedding 向量列（BLOB）阶段二接入向量化检索时再映射，本实体暂不处理。
  *              对应 knowledge_base 表。
- * @Author 开璐瑶
+ * @Author 闵娟
  * @Date 2026-11-17
  * @Version 1.0
  */
