@@ -8,8 +8,10 @@ import com.example.campusrepair.entity.KnowledgeBase;
 import com.example.campusrepair.entity.KnowledgeHistory;
 import com.example.campusrepair.security.RequirePermission;
 import com.example.campusrepair.service.KnowledgeService;
+import com.example.campusrepair.service.KnowledgeStreamService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,7 +31,7 @@ import java.util.Map;
  * @Description 学生口（浏览/检索/有帮助计数，权限 menu:diagnosis）与
  *              管理员口（增删改/审核/回滚/版本历史，权限 knowledge:manage，
  *              权限码见 docs/sql/knowledge-patch.sql）。
- * @Author 开璐瑶
+ * @Author 闵娟
  * @Date 2026-11-17
  * @Version 1.0
  */
@@ -39,6 +41,7 @@ import java.util.Map;
 public class KnowledgeController {
 
     private final KnowledgeService knowledgeService;
+    private final KnowledgeStreamService knowledgeStreamService;
 
     /* ---------- 学生口 ---------- */
 
@@ -76,7 +79,36 @@ public class KnowledgeController {
     @RequirePermission("menu:diagnosis")
     public ApiResponse<DiagnosisResult> ask(@RequestBody Map<String, String> body) {
         String question = body == null ? null : body.get("question");
-        return ApiResponse.success(knowledgeService.ask(AuthContext.userId(), question));
+        String conversationId = body == null ? null : body.get("conversationId");
+        return ApiResponse.success(knowledgeService.ask(AuthContext.userId(), question, conversationId));
+    }
+
+    /**
+     * 实时流式自助诊断：RAG 检索 + grounded LLM 逐字输出（SSE）。
+     * 事件顺序：meta（命中/状态）→ delta（逐字）→ done（反馈/追问），失败发 error。
+     * 原同步 /session 保留，前端可随时降级。
+     */
+    @PostMapping("/session/stream")
+    @RequirePermission("menu:diagnosis")
+    public SseEmitter askStream(@RequestBody Map<String, String> body) {
+        String question = body == null ? null : body.get("question");
+        String conversationId = body == null ? null : body.get("conversationId");
+        // AuthContext 是 ThreadLocal，后台 SSE 线程读不到，必须在此处取好再传下去
+        return knowledgeStreamService.streamAsk(AuthContext.userId(), question, conversationId);
+    }
+
+    /** 热门问题 Top-5（来自诊断会话频次，冷启动有演示兜底） */
+    @GetMapping("/hot-questions")
+    @RequirePermission("menu:diagnosis")
+    public ApiResponse<List<Map<String, Object>>> hotQuestions() {
+        return ApiResponse.success(knowledgeStreamService.hotQuestions());
+    }
+
+    /** 自助诊断统计：总提问 / 已解决 / 解决率 / 未命中 */
+    @GetMapping("/diagnosis/stats")
+    @RequirePermission("menu:diagnosis")
+    public ApiResponse<Map<String, Object>> diagnosisStats() {
+        return ApiResponse.success(knowledgeStreamService.stats());
     }
 
     /** 问答反馈：?solved=true|false（解决时命中条目 helpful +1） */

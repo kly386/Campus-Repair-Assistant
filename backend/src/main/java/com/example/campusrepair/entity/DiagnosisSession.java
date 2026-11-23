@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
  *              检索相似度与是否自助解决。is_solved 反馈会同时给命中条目的
  *              helpful 计数 +1，形成"问答反哺知识库"的数据闭环。
  *              对应 diagnosis_session 表。
- * @Author 开璐瑶
+ * @Author 闵娟
  * @Date 2026-11-17
  * @Version 1.0
  */
@@ -28,6 +28,10 @@ public class DiagnosisSession {
     /** 提问学生 ID（逻辑关联 user.id） */
     @Column(name = "user_id", nullable = false)
     private Long userId;
+
+    /** 多轮对话 ID：前端每次进入诊断页生成一次，同一对话的所有轮次共用一个 */
+    @Column(name = "conversation_id", length = 64)
+    private String conversationId;
 
     /** 学生的问题 */
     @Column(name = "question", nullable = false, length = 500)
@@ -45,12 +49,16 @@ public class DiagnosisSession {
     @Column(name = "matched_kb_id")
     private Long matchedKbId;
 
+    /** 诊断结论紧急等级：HIGH / NORMAL，供报修接力预填 */
+    @Column(name = "emergency_level", length = 16)
+    private String emergencyLevel;
+
     /** 检索相似度 0~1（向量检索时有值；LIKE 降级时为空） */
     @Column(name = "similarity", precision = 4, scale = 3)
     private BigDecimal similarity;
 
-    /** 是否自助解决：1=是 0=否/未反馈 */
-    @Column(name = "is_solved", nullable = false)
+    /** 是否自助解决：NULL=未反馈 / 0=反馈没解决 / 1=反馈已解决 */
+    @Column(name = "is_solved")
     private Boolean isSolved;
 
     @Column(name = "gmt_create")

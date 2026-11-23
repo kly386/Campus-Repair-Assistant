@@ -9,7 +9,7 @@ import lombok.Data;
  *
  * @Description 管理员端创建与编辑共用。审核状态、来源、帮助数等由服务端
  *              控制，不接受前端传入（防止越权直改审核状态）。
- * @Author 开璐瑶
+ * @Author 闵娟
  * @Date 2026-11-17
  * @Version 1.0
  */

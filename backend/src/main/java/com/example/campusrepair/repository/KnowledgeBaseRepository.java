@@ -15,7 +15,7 @@ import java.util.Optional;
  * @Description 学生端浏览/检索（仅 APPROVED）、管理员端列表（全状态）、
  *              helpful 原子累加。检索用 LIKE 关键词匹配——这是阶段二
  *              向量化检索的降级保底方案，接口签名保持一致以便无缝切换。
- * @Author 开璐瑶
+ * @Author 闵娟
  * @Date 2026-11-17
  * @Version 1.0
  */

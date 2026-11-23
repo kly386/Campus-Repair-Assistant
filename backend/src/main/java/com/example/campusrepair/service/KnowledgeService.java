@@ -13,7 +13,7 @@ import java.util.List;
  * @Description 后续阶段在本接口上扩展：阶段二追加 RAG 检索问答
  *              （向量化 Top-K + LIKE 降级 + diagnosis_session 落库），
  *              阶段三追加工单知识回流（ai_confidence 置信度治理）。
- * @Author 开璐瑶
+ * @Author 闵娟
  * @Date 2026-11-17
  * @Version 1.0
  */
@@ -56,7 +56,7 @@ public interface KnowledgeService {
     /* ---------- 自助诊断（RAG 问答） ---------- */
 
     /** 学生提问：向量检索 Top-K（降级 LIKE）→ 组织答案 → 落 diagnosis_session */
-    DiagnosisResult ask(Long userId, String question);
+    DiagnosisResult ask(Long userId, String question, String conversationId);
 
     /** 学生反馈"是否解决"：is_solved 落库；解决时给命中条目 helpful +1 */
     void markSolved(Long sessionId, Long userId, boolean solved);

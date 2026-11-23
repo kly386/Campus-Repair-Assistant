@@ -20,7 +20,7 @@ import java.util.Optional;
  * @Description 调用阿里云百炼 text-embedding-v4。任何失败（未配 key、
  *              网络、限流）都只记 WARN 并返回 empty，由上层降级为 LIKE
  *              检索——与 MinIO 优雅降级同一设计哲学：外部依赖坏了不让主流程挂。
- * @Author 开璐瑶
+ * @Author 闵娟
  * @Date 2026-11-17
  * @Version 1.0
  */
