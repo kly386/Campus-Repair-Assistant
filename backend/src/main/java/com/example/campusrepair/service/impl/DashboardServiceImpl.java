@@ -38,16 +38,16 @@ public class DashboardServiceImpl implements DashboardService {
         data.put("emergencyDistribution", queryGroupCount(
                 "SELECT emergency_level AS name, COUNT(*) AS cnt FROM repair_order WHERE is_deleted = 0 GROUP BY emergency_level"));
         data.put("categoryTop", queryGroupCount(
-                "SELECT c.name AS name, COUNT(*) AS cnt FROM repair_order o "
+                "SELECT COALESCE(NULLIF(c.name, ''), '未分类') AS name, COUNT(*) AS cnt FROM repair_order o "
                         + "LEFT JOIN repair_category c ON o.category_id = c.id "
-                        + "WHERE o.is_deleted = 0 GROUP BY c.name ORDER BY cnt DESC LIMIT 5"));
+                        + "WHERE o.is_deleted = 0 GROUP BY COALESCE(NULLIF(c.name, ''), '未分类') ORDER BY cnt DESC LIMIT 5"));
         data.put("buildingTop", queryGroupCount(
-                "SELECT building AS name, COUNT(*) AS cnt FROM repair_order WHERE is_deleted = 0 "
-                        + "GROUP BY building ORDER BY cnt DESC LIMIT 5"));
+                "SELECT COALESCE(NULLIF(TRIM(building), ''), '未填写') AS name, COUNT(*) AS cnt FROM repair_order WHERE is_deleted = 0 "
+                        + "GROUP BY COALESCE(NULLIF(TRIM(building), ''), '未填写') ORDER BY cnt DESC LIMIT 5"));
         data.put("workerTop", queryGroupCount(
-                "SELECT u.real_name AS name, COUNT(*) AS cnt FROM repair_order o "
-                        + "JOIN user u ON o.worker_id = u.id WHERE o.is_deleted = 0 "
-                        + "GROUP BY o.worker_id, u.real_name ORDER BY cnt DESC LIMIT 5"));
+                "SELECT COALESCE(NULLIF(u.real_name, ''), CONCAT('师傅#', o.worker_id)) AS name, COUNT(*) AS cnt FROM repair_order o "
+                        + "LEFT JOIN user u ON o.worker_id = u.id WHERE o.is_deleted = 0 AND o.worker_id IS NOT NULL "
+                        + "GROUP BY o.worker_id, COALESCE(NULLIF(u.real_name, ''), CONCAT('师傅#', o.worker_id)) ORDER BY cnt DESC LIMIT 5"));
         data.put("trend", queryTrend14Days());
         data.put("roles", queryGroupCount(
                 "SELECT role AS name, COUNT(*) AS cnt FROM user WHERE is_deleted = 0 GROUP BY role"));
@@ -141,7 +141,7 @@ public class DashboardServiceImpl implements DashboardService {
      */
     private Map<String, Object> queryFileSummary() {
         Map<String, Object> row = jdbcTemplate.queryForMap(
-                "SELECT COUNT(*) AS cnt, COALESCE(SUM(file_size), 0) AS totalSize FROM file_object");
+                "SELECT COUNT(*) AS cnt, COALESCE(SUM(file_size), 0) AS totalSize FROM file_object WHERE is_deleted = 0");
         Map<String, Object> files = new LinkedHashMap<>(2);
         files.put("count", ((Number) row.get("cnt")).longValue());
         files.put("totalSize", ((Number) row.get("totalSize")).longValue());
