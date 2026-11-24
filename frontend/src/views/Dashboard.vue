@@ -60,27 +60,11 @@
 
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue';
-import * as echarts from 'echarts/core';
-import { BarChart, LineChart, PieChart } from 'echarts/charts';
-import {
-  AxisPointerComponent,
-  GridComponent,
-  LegendComponent,
-  TooltipComponent
-} from 'echarts/components';
-import { CanvasRenderer } from 'echarts/renderers';
+import * as echarts from 'echarts';
 import { Refresh } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { getOverview } from '../api/dashboard';
 import { formatApiError } from '../api/http';
-
-// 按需注册：只打包大屏实际用到的 3 种图表、4 个组件和 Canvas 渲染器，
-// 避免整包引入 ECharts 造成的首屏 JS 体积与解析开销。
-echarts.use([
-  BarChart, LineChart, PieChart,
-  AxisPointerComponent, GridComponent, LegendComponent, TooltipComponent,
-  CanvasRenderer
-]);
 
 const EMERGENCY_LABEL = { LOW: '低', MEDIUM: '中', HIGH: '高' };
 const STATUS_LABEL = {
@@ -98,7 +82,7 @@ const emergencyRef = ref();
 const categoryRef = ref();
 const buildingRef = ref();
 const workerRef = ref();
-const charts = new Map();
+const charts = {};
 
 const statCards = ref([
   { label: '工单总量', value: 0, color: '#409eff' },
@@ -111,7 +95,6 @@ const statCards = ref([
 
 /** 拉取总览数据并渲染全部图表 */
 async function load() {
-  if (loading.value) return;
   loading.value = true;
   try {
     const resp = await getOverview();
@@ -120,11 +103,11 @@ async function load() {
     refreshTime.value = new Date().toLocaleTimeString();
     renderStatCards();
     renderTrend(data.trend || []);
-    renderPie('status', statusRef.value, translateNames(data.statusDistribution, STATUS_LABEL), '状态');
-    renderPie('emergency', emergencyRef.value, translateNames(data.emergencyDistribution, EMERGENCY_LABEL), '紧急度');
-    renderBar('category', categoryRef.value, data.categoryTop || [], '故障类别');
-    renderBar('building', buildingRef.value, data.buildingTop || [], '报修量');
-    renderBar('worker', workerRef.value, data.workerTop || [], '接单量');
+    renderPie(statusRef.value, translateNames(data.statusDistribution, STATUS_LABEL), '状态');
+    renderPie(emergencyRef.value, translateNames(data.emergencyDistribution, EMERGENCY_LABEL), '紧急度');
+    renderBar(categoryRef.value, data.categoryTop || [], '故障类别');
+    renderBar(buildingRef.value, data.buildingTop || [], '报修量');
+    renderBar(workerRef.value, data.workerTop || [], '接单量');
   } catch (err) {
     ElMessage.error('大屏数据加载失败：' + formatApiError(err));
   } finally {
@@ -152,10 +135,9 @@ function translateNames(list, labelMap) {
 
 /** 折线图：近 14 天趋势 */
 function renderTrend(list) {
-  const chart = getChart('trend', trendRef.value);
-  if (!chart) return;
+  const chart = getChart(trendRef.value);
   chart.setOption({
-    tooltip: { trigger: 'axis', confine: true },
+    tooltip: { trigger: 'axis' },
     grid: { left: 40, right: 20, top: 30, bottom: 30 },
     xAxis: { type: 'category', data: list.map((it) => it.date.slice(5)) },
     yAxis: { type: 'value', minInterval: 1 },
@@ -167,11 +149,11 @@ function renderTrend(list) {
 }
 
 /** 饼图：状态 / 紧急度（恢复原样式：外标签+底部图例，半屏宽度足够展示） */
-function renderPie(key, el, list, name) {
-  const chart = getChart(key, el);
-  if (!chart) return;
+function renderPie(el, list, name) {
+  if (!el) return;
+  const chart = getChart(el);
   chart.setOption({
-    tooltip: { trigger: 'item', confine: true, formatter: '{b}: {c} 单 ({d}%)' },
+    tooltip: { trigger: 'item', formatter: '{b}: {c} 单 ({d}%)' },
     legend: { bottom: 0, type: 'scroll' },
     series: [{
       name, type: 'pie', radius: ['38%', '62%'], center: ['50%', '44%'],
@@ -181,12 +163,12 @@ function renderPie(key, el, list, name) {
 }
 
 /** 横向条形图：类别 / 楼栋 / 师傅 Top5 */
-function renderBar(key, el, list, name) {
-  const chart = getChart(key, el);
-  if (!chart) return;
+function renderBar(el, list, name) {
+  if (!el) return;
+  const chart = getChart(el);
   const data = [...list].reverse();
   chart.setOption({
-    tooltip: { trigger: 'axis', confine: true, axisPointer: { type: 'shadow' } },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
     grid: { left: 90, right: 30, top: 10, bottom: 30 },
     xAxis: { type: 'value', minInterval: 1 },
     yAxis: { type: 'category', data: data.map((it) => it.name) },
@@ -197,49 +179,33 @@ function renderBar(key, el, list, name) {
   });
 }
 
-/** 复用/懒创建 ECharts 实例：按固定 key 管理，避免依赖 DOM 上的临时属性 */
-function getChart(key, el) {
-  if (!el) return null;
-  let chart = charts.get(key);
-  if (!chart) {
-    chart = echarts.init(el);
-    charts.set(key, chart);
+/** 复用/懒创建 ECharts 实例 */
+function getChart(el) {
+  if (!charts[el.__key]) {
+    charts[el.__key] = echarts.init(el);
   }
-  return chart;
+  return charts[el.__key];
 }
 
-/** 30 秒自动刷新：页面不可见时暂停，避免后台标签页空跑请求 */
+/** 30 秒自动刷新 */
 let timer;
-let resizeTimer;
 onMounted(() => {
+  [trendRef, statusRef, emergencyRef, categoryRef, buildingRef, workerRef].forEach(
+    (r, i) => { if (r.value) r.value.__key = `chart${i}`; }
+  );
   load();
-  timer = setInterval(() => {
-    if (!document.hidden) load();
-  }, 30000);
-  document.addEventListener('visibilitychange', handleVisibilityChange);
+  timer = setInterval(load, 30000);
   window.addEventListener('resize', handleResize);
 });
 
 onBeforeUnmount(() => {
   clearInterval(timer);
-  clearTimeout(resizeTimer);
-  document.removeEventListener('visibilitychange', handleVisibilityChange);
   window.removeEventListener('resize', handleResize);
-  charts.forEach((chart) => chart.dispose());
-  charts.clear();
+  Object.values(charts).forEach((c) => c.dispose());
 });
 
-/** 从后台标签页切回时立即补一次数据，避免等待下一个轮询周期 */
-function handleVisibilityChange() {
-  if (!document.hidden) load();
-}
-
-/** 窗口尺寸变化时节流 resize，避免拖动窗口时高频重绘 */
 function handleResize() {
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => {
-    charts.forEach((chart) => chart.resize());
-  }, 150);
+  Object.values(charts).forEach((c) => c.resize());
 }
 </script>
 
