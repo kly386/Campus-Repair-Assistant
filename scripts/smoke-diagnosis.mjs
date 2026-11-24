@@ -223,6 +223,7 @@ async function main() {
   let token;
   try {
     token = await login();
+    COMMON_HEADERS['Authorization'] = `Bearer ${token}`;
     ok('演示账号 mock 登录', 'accessToken 已获取');
   } catch (e) {
     fail('演示账号 mock 登录', e.message);
