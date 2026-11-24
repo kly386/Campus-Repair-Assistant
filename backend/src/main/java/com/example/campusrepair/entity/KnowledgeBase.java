@@ -60,7 +60,7 @@ public class KnowledgeBase {
     @Column(name = "review_status", nullable = false, length = 20)
     private String reviewStatus;
 
-    /** 历史向量列（旧 DashScope text-embedding-v4 生成；运行时已改用硅基流动 BAAI/bge-m3 内存向量缓存，此列仅保留兼容） */
+    /** 向量化结果（DashScope text-embedding-v4，float[] 序列化为字节；未向量化为空） */
     @Column(name = "embedding", columnDefinition = "BLOB")
     private byte[] embedding;
 

@@ -25,11 +25,11 @@
 
 | 软件 | 版本 |
 |------|------|
-| Java | 17+（pom 指定 17，Lombok 1.18.42 兼容更高 JDK） |
-| Maven | 3.9.x（或用后端自带 mvnw / IDEA Maven） |
-| Spring Boot | 3.3.4 |
-| Node.js | 18+ |
-| npm | 9+ |
+| Java | 25 |
+| Maven | 3.9.16 |
+| Spring Boot | 4.0.0 |
+| Node.js | 23.11.0 |
+| npm | 10.9.2 |
 | Vue | 3.5.10 |
 | Vite | 5.4.8 |
 | Element Plus | 2.8.4 |
@@ -84,7 +84,7 @@ cd backend
 mvn spring-boot:run
 ```
 
-> 数据库密码本地通过 `DB_PASSWORD` 覆盖，默认仅开发用；推荐写入被 `.gitignore` 排除的 `backend/src/main/resources/application-local.properties`。诊断侧另需 `ZHIPU_API_KEY` / `SILICONFLOW_API_KEY`，同样只放本地配置。后端默认端口 8081。Docker 部署时在根目录建 `.env` 设 `MYSQL_ROOT_PASSWORD` 即可统一覆盖 MySQL 与后端。
+> 数据库凭据本地默认 `root/123456`（仅本地开发用）。正式/演示环境请用环境变量覆盖：`DB_USERNAME` / `DB_PASSWORD`（即 `SPRING_DATASOURCE_USERNAME/PASSWORD`），或写入被 `.gitignore` 排除的 `application-local.yml`。Docker 部署时在根目录建 `.env` 设 `MYSQL_ROOT_PASSWORD` 即可统一覆盖 MySQL 与后端。
 
 ### Tomcat 集群部署
 

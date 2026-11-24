@@ -96,8 +96,8 @@ app.ai.model=${AI_MODEL:qwen-vl-plus}
 
 ### 3.4 成功判据：只留在种子里，不进实时生成
 
-- 种子 `knowledge_base.answer` 末尾仍写"成功判据：…"，直接维护在 `docs/sql/knowledge-seed.sql`，
-  `INSERT ... ON DUPLICATE KEY UPDATE` 保证重灌能更新；
+- 种子 `knowledge_base.answer` 末尾仍写"成功判据：…"，
+  由 `scripts/generate-knowledge-seed.py` 生成，`INSERT ... ON DUPLICATE KEY UPDATE` 保证重灌能更新；
 - 实时流式回答的分步操作**只列动作**，不输出判据行（避免每步都跟一句"以现场现象为准"）；
 - 判据只在**降级为知识库原文**时随原文展示；`attemptedSteps()` 仍过滤旧格式里的判据行，兼容历史会话。
 
@@ -190,7 +190,8 @@ app.ai.model=${AI_MODEL:qwen-vl-plus}
 - **解决率 = 已解决数 / 已反馈数**，分母不含未反馈会话；
 - `noHit`（未命中数）**排除**用户主动中止；
 - `aborted` 单独计数（点停止 / 连接断开），不和匹配失败、报错混一类；
-- 新库由 `docs/sql/init.sql` 直接包含 `is_solved` 与 `aborted` 字段，无需再执行历史迁移脚本。
+- 旧库通过 `docs/sql/diagnosis-conversation-migration.sql` 迁移 is_solved，
+  再通过 `docs/sql/diagnosis-aborted-migration.sql` 加 `aborted` 列（幂等，不建表）。
 
 ---
 
@@ -214,7 +215,7 @@ app.ai.model=${AI_MODEL:qwen-vl-plus}
 
 - 改诊断提示词、阈值、分层拦截、中止行为 → 只改 `DiagnosisEngine` / `DiagnosisRules` / `AbortRegistry`；
 - 改向量化/检索策略 → 只改 `KnowledgeVectorCache` / `SiliconFlowEmbeddingServiceImpl`；
-- 改种子答案或判据 → 直接改 `docs/sql/knowledge-seed.sql` 后重灌，
+- 改种子答案或判据 → 改 `scripts/generate-knowledge-seed.py` 后重新生成并重灌，
   再调 `POST /api/knowledge/cache/refresh`；
 - 改报修字段抽取 → 找伍梦圆，不在诊断侧动；
 - **不要为诊断新建知识表，不要碰 `frontend/src/views/Repair.vue` 的预填改动。**
