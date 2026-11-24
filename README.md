@@ -46,7 +46,7 @@ Campus-Repair-Assistant/
 ├── backend/           # Spring Boot 后端（分层：controller/service/repository/entity/dto/config）
 ├── deploy/            # Tomcat / Nginx / MySQL 集群配置模板
 ├── docs/              # 课程设计文档
-│   ├── sql/           # 数据库脚本（setup-all.sql 一键初始化；其余为拆分维护文件）
+│   ├── sql/           # 数据库脚本（init.sql）
 │   ├── api/           # API 接口文档
 │   ├── 索引.md        # 文档目录与提交清单
 │   ├── 需求分析.md    # 系统功能分析说明书
@@ -70,24 +70,6 @@ Campus-Repair-Assistant/
 | 管理员 | 排班 / 运营看板 / 规则配置 |
 
 ## 快速开始
-
-### 数据库（新机器只执行一次）
-
-新机器不需要逐个导入 SQL，直接执行一键脚本：
-
-```bash
-mysql -uroot -p --default-character-set=utf8mb4 < docs/sql/setup-all.sql
-```
-
-PowerShell 也可以：
-
-```powershell
-Get-Content -Raw -Encoding UTF8 docs/sql/setup-all.sql | mysql -uroot -p --default-character-set=utf8mb4 campus_repair
-```
-
-脚本会自动建库、建表，导入权限/演示数据与 100 条自助诊断知识种子；不用再手动执行其他 SQL。
-
-> 维护说明：`setup-all.sql` 由 `scripts/build-setup-all.py` 根据 `docs/sql/` 下的拆分文件生成。以后改了某个拆分 SQL，记得运行 `python scripts/build-setup-all.py` 重新生成，不要直接改 `setup-all.sql`。
 
 ### 前端
 ```bash
