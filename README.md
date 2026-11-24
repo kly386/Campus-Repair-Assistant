@@ -82,7 +82,7 @@ mysql -uroot -p --default-character-set=utf8mb4 < docs/sql/setup-all.sql
 PowerShell 也可以：
 
 ```powershell
-Get-Content -Raw -Encoding UTF8 docs/sql/setup-all.sql | mysql -uroot -p --default-character-set=utf8mb4 campus_repair
+Get-Content -Raw -Encoding UTF8 docs/sql/setup-all.sql | mysql -uroot -p --default-character-set=utf8mb4
 ```
 
 脚本会自动建库、建表，导入权限/演示数据与 100 条自助诊断知识种子；不用再手动执行其他 SQL。

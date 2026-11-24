@@ -33,7 +33,7 @@ HEADER = """-- ============================================================
 --
 -- 用法（仓库根目录，必须显式 utf8mb4）：
 --   mysql -uroot -p --default-character-set=utf8mb4 < docs/sql/setup-all.sql
---   Get-Content -Raw -Encoding UTF8 docs/sql/setup-all.sql | mysql -uroot -p --default-character-set=utf8mb4 campus_repair
+--   Get-Content -Raw -Encoding UTF8 docs/sql/setup-all.sql | mysql -uroot -p --default-character-set=utf8mb4
 --
 -- 本脚本会自动创建 campus_repair 数据库，并按依赖顺序导入：
 --   1. init.sql                  基础业务表 + 初始类别/配置
