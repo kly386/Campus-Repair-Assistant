@@ -231,7 +231,35 @@ function errText(e) {
   return e?.message || '未知错误'
 }
 
+function normalizeEmergencyLevel(level) {
+  const v = String(level || '').toUpperCase()
+  if (v === 'HIGH') return 'high'
+  if (v === 'MEDIUM' || v === 'NORMAL') return 'medium'
+  if (v === 'LOW') return 'low'
+  return ''
+}
+
 function applyPrefill() {
+  const handoff = route.query.handoff
+  if (typeof handoff === 'string' && handoff.trim()) {
+    try {
+      const raw = sessionStorage.getItem('repairHandoff')
+      if (raw) {
+        const data = JSON.parse(raw)
+        if (data && data.nonce === handoff) {
+          if (!form.value.description && data.question) form.value.description = String(data.question).trim()
+          if (!form.value.categoryId && data.categoryId) form.value.categoryId = Number(data.categoryId)
+          const em = normalizeEmergencyLevel(data.emergencyLevel)
+          if (em && form.value.emergencyLevel === 'low') form.value.emergencyLevel = em
+          sessionStorage.removeItem('repairHandoff')
+          return
+        }
+      }
+    } catch {
+      // ignore invalid handoff
+    }
+  }
+
   const q = route.query.question
   if (typeof q === 'string' && q.trim() && !form.value.description) {
     form.value.description = q.trim()
