@@ -86,6 +86,11 @@
               <el-input v-model.trim="smsForm.phone" size="large" maxlength="11" placeholder="请输入手机号" clearable>
                 <template #prefix><el-icon><Iphone /></el-icon></template>
               </el-input>
+              <button v-if="showDemoAccounts" type="button" class="demo-inline" @click="fillSmsDemo">
+                <span>演示账号</span>
+                <code>学生 {{ SMS_DEMO_PHONE }}</code>
+                <span class="demo-inline-tip">点击填充手机号</span>
+              </button>
             </el-form-item>
             <el-form-item>
               <div class="code-row">
@@ -135,6 +140,11 @@
               <el-input v-model.trim="emailForm.email" size="large" placeholder="请输入邮箱地址" clearable>
                 <template #prefix><el-icon><Message /></el-icon></template>
               </el-input>
+              <button v-if="showDemoAccounts" type="button" class="demo-inline" @click="fillEmailDemo">
+                <span>演示账号</span>
+                <code>学生 {{ EMAIL_DEMO_EMAIL }}</code>
+                <span class="demo-inline-tip">点击填充邮箱地址</span>
+              </button>
             </el-form-item>
             <el-form-item>
               <div class="code-row">
@@ -214,7 +224,7 @@
         show-icon
       />
 
-      <div v-if="showDemoAccounts" class="demo-panel">
+      <div v-if="showDemoAccounts && tab === 'pwd'" class="demo-panel">
         <div class="demo-title">
           <span>演示账号</span>
           <small>点击自动填充账号密码</small>
@@ -274,6 +284,9 @@ const LOCK_UNTIL_KEY = 'authLockUntil';
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^1[3-9]\d{9}$/;
 const showDemoAccounts = import.meta.env.VITE_SHOW_DEMO_ACCOUNTS !== 'false';
+// 手机/邮箱验证码登录的演示账号（DB 中对应的学生用户已存在）
+const SMS_DEMO_PHONE = '15156987480';
+const EMAIL_DEMO_EMAIL = '1148625258@qq.com';
 const demoAccounts = [
   { label: '学生', username: 'student', password: 'student123' },
   { label: '维修师傅', username: 'worker', password: 'worker123' },
@@ -364,6 +377,22 @@ function fillDemoAccount(account) {
   pwdForm.captchaCode = '';
   errorMsg.value = '';
   ElMessage.info(`已填入${account.label}账号，请输入图形验证码后登录`);
+}
+
+function fillSmsDemo() {
+  smsForm.phone = SMS_DEMO_PHONE;
+  smsForm.code = '';
+  mockSmsCode.value = '';
+  errorMsg.value = '';
+  ElMessage.info('已填入演示手机号，点击发送验证码后填写收到的验证码');
+}
+
+function fillEmailDemo() {
+  emailForm.email = EMAIL_DEMO_EMAIL;
+  emailForm.code = '';
+  mockEmailCode.value = '';
+  errorMsg.value = '';
+  ElMessage.info('已填入演示邮箱，点击发送验证码后填写收到的验证码');
 }
 function lockMinutesFromError(error) {
   const data = error?.response?.data?.data;
@@ -853,6 +882,37 @@ onUnmounted(() => {
   color: #6b7f91;
   font-size: 10px;
   white-space: nowrap;
+}
+.demo-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px dashed #bcdcf1;
+  border-radius: 8px;
+  background: #f6fbff;
+  color: #337fbe;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .2s, background .2s;
+}
+.demo-inline:hover {
+  border-color: #6bb0e8;
+  background: #eef8ff;
+}
+.demo-inline code {
+  color: #365873;
+  font-size: 12px;
+  font-weight: 700;
+}
+.demo-inline-tip {
+  margin-left: auto;
+  color: #8ca2b5;
+  font-size: 11px;
 }
 @media (max-width: 640px) {
   .login-card :deep(.el-card__body) {
