@@ -1,10 +1,10 @@
 -- ============================================================
 -- 知识库演示种子数据（负责人：闵娟）
 -- 共 50 条 APPROVED 知识，覆盖水电、网络、门窗家具、宿舍电器与报修咨询。
--- 生成方式：python scripts/generate-knowledge-seed.py
+-- 维护方式：直接编辑本文件的 answer/关键词；不再使用生成脚本。
 -- 导入方式：powershell -ExecutionPolicy Bypass -File .\scripts\seed-knowledge.ps1
 -- 或：docker exec -i mysql-master mysql -uroot -p密码 --default-character-set=utf8mb4 campus_repair < docs/sql/knowledge-seed.sql
--- 说明：answer 末尾追加成功判据；embedding 为 text-embedding-v4 的 1024 维 float32 小端 BLOB。
+-- 说明：answer 末尾追加成功判据；embedding 列为历史生成数据，运行时由硅基流动 BAAI/bge-m3 重新向量化。
 -- 导入：INSERT ... ON DUPLICATE KEY UPDATE，重复执行会更新已有 50 条而不是被 IGNORE 跳过。
 -- 安全：本文件不包含 API key，也不需要联网即可导入。
 -- ============================================================

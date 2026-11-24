@@ -1,6 +1,0 @@
--- 已废弃：旧版三方式登录补丁。
--- 新版统一认证 + 动态 RBAC 请依次执行：
---   1. docs/sql/auth-rbac.sql
---   2. docs/sql/auth-seed.sql
--- 说明：auth-rbac.sql 已包含 email / wx_openid / status / token_version 字段，
--- 不再重复执行旧 ALTER，避免重复列错误。
