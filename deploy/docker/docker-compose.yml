@@ -36,9 +36,9 @@ services:
       - --max_connections=200
     volumes:
       - master-data:/var/lib/mysql
-      # 入口脚本按字母序执行：01 建账号（应用账号 + 复制账号），02 导入 15 张表
+      # 入口脚本按字母序执行：01 建账号（应用账号 + 复制账号），02 一键导入表/权限/种子数据
       - ./master/01-users.sql:/docker-entrypoint-initdb.d/01-users.sql:ro
-      - ../../docs/sql/init.sql:/docker-entrypoint-initdb.d/02-init.sql:ro
+      - ../../docs/sql/setup-all.sql:/docker-entrypoint-initdb.d/02-setup-all.sql:ro
     healthcheck:
       test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${MYSQL_ROOT_PASSWORD:-ChangeMe_123}" ]
       interval: 5s

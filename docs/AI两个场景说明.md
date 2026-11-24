@@ -190,7 +190,7 @@ app.ai.model=${AI_MODEL:qwen-vl-plus}
 - **解决率 = 已解决数 / 已反馈数**，分母不含未反馈会话；
 - `noHit`（未命中数）**排除**用户主动中止；
 - `aborted` 单独计数（点停止 / 连接断开），不和匹配失败、报错混一类；
-- 新库由 `docs/sql/init.sql` 直接包含 `is_solved` 与 `aborted` 字段，无需再执行历史迁移脚本。
+- 新库由 `docs/sql/setup-all.sql`（内含 `init.sql`）直接包含 `is_solved` 与 `aborted` 字段，无需再执行历史迁移脚本。
 
 ---
 
@@ -214,7 +214,7 @@ app.ai.model=${AI_MODEL:qwen-vl-plus}
 
 - 改诊断提示词、阈值、分层拦截、中止行为 → 只改 `DiagnosisEngine` / `DiagnosisRules` / `AbortRegistry`；
 - 改向量化/检索策略 → 只改 `KnowledgeVectorCache` / `SiliconFlowEmbeddingServiceImpl`；
-- 改种子答案或判据 → 直接改 `docs/sql/knowledge-seed.sql` 后重灌，
+- 改种子答案或判据 → 改 `docs/sql/knowledge-seed.sql`，运行 `python scripts/build-setup-all.py` 重新生成一键脚本后重灌，
   再调 `POST /api/knowledge/cache/refresh`；
 - 改报修字段抽取 → 找伍梦圆，不在诊断侧动；
 - **不要为诊断新建知识表，不要碰 `frontend/src/views/Repair.vue` 的预填改动。**

@@ -75,7 +75,7 @@ docker compose ps          # 等两个容器都变成 healthy
 | 脚本 | 作用 |
 |------|------|
 | `deploy/docker/master/01-users.sql` | 主库：建应用账号 `campus` 与复制账号 `repl` |
-| `docs/sql/init.sql`（挂载为 `02-init.sql`） | 主库：导入 15 张业务表 |
+| `docs/sql/setup-all.sql`（挂载为 `02-setup-all.sql`） | 主库：一键导入全部表、权限、演示数据与知识种子 |
 | `deploy/docker/slave/01-users.sql` | 从库：单独建应用账号 `campus` |
 
 验证主库参数与建表结果：
@@ -302,7 +302,7 @@ java -jar target/ROOT.war
 | 现象 | 原因与处置 |
 |------|------------|
 | 应用报 `Access denied for user 'campus'@'localhost'` | 本机另有 MySQL（如 XAMPP 的 `mysqlzt`）占着 3306，应用连错了库。`net stop mysqlzt` 停掉后重试（第 3 章） |
-| 容器 `dependency failed to start: container mysql-master is unhealthy` | 主库初始化脚本报错或还在初始化，`docker logs mysql-master` 查看；确认 `docs/sql/init.sql` 挂载路径为 `../../docs/sql/init.sql` |
+| 容器 `dependency failed to start: container mysql-master is unhealthy` | 主库初始化脚本报错或还在初始化，`docker logs mysql-master` 查看；确认 `docs/sql/setup-all.sql` 挂载路径为 `../../docs/sql/setup-all.sql` |
 | `Replica_IO_Running: No`，`Last_Errno: 2061` | `caching_sha2_password` 要求安全连接，`CHANGE REPLICATION SOURCE` 加 `SOURCE_SSL=1`（4.1） |
 | `Replica_IO_Running: No`，`Last_Errno: 1045` | `repl` 密码不一致或授权不对，回 3.2 / `deploy/docker/master/01-users.sql` 核对 |
 | `Replica_IO_Running: No`，`Last_Errno: 1236` | GTID 起点冲突：从库曾复制过其它主库，`RESET REPLICA ALL;` 后重做第 4 章 |

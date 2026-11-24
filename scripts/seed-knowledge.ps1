@@ -59,7 +59,7 @@ try {
     )
     & docker @mysqlArgs
     if ($LASTEXITCODE -ne 0) {
-        throw 'MySQL import failed. Check container status, root password, and docs/sql/init.sql.'
+        throw 'MySQL import failed. Check container status, root password, and docs/sql/setup-all.sql.'
     }
 
     Write-Host '[seed] Approved knowledge count:'
