@@ -55,6 +55,12 @@ public class RepairOrder {
     @Column(name = "room")
     private String room;
 
+    @Column(name = "contact_phone")
+    private String contactPhone;
+
+    @Column(name = "backup_phone")
+    private String backupPhone;
+
     @Column(name = "appointment_time")
     private LocalDateTime appointmentTime;
 
