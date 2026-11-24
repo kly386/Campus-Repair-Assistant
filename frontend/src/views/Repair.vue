@@ -167,34 +167,6 @@ const parsing = ref(false)
 const parseResult = ref(null)
 const handoff = ref(null)
 
-/**
- * 自助诊断转报修：Diagnosis.vue 把结论放 sessionStorage，URL 只带一次性 nonce。
- * 这里校验 nonce 后回填表单，避免把上一单的诊断信息误带到下一单。
- */
-onMounted(() => {
-  const nonce = route.query.handoff
-  if (!nonce) return
-  try {
-    const raw = sessionStorage.getItem('repairHandoff')
-    if (!raw) return
-    const data = JSON.parse(raw)
-    if (data.nonce !== nonce) return
-    handoff.value = data
-    const steps = data.attemptedSteps || []
-    form.value.description = data.question
-      ? data.question + (steps.length ? `\n\n已尝试步骤：\n${steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}` : '')
-      : form.value.description
-    if (data.categoryId) {
-      form.value.categoryId = Number(data.categoryId)
-    }
-    if (data.emergencyLevel) {
-      form.value.emergencyLevel = data.emergencyLevel === 'HIGH' ? 'high' : 'low'
-    }
-  } catch {
-    // 坏数据直接忽略，不影响正常报修
-  }
-})
-
 function clearHandoff() {
   handoff.value = null
   sessionStorage.removeItem('repairHandoff')
@@ -301,19 +273,28 @@ function normalizeEmergencyLevel(level) {
   return ''
 }
 
+/**
+ * 自助诊断转报修：Diagnosis.vue 把结论放 sessionStorage，URL 只带一次性 nonce。
+ * 统一在这里校验 nonce 并回填表单；handoff.value 保留原始数据，提交时写入 aiParsedInfo。
+ * 不在这里删 sessionStorage —— 刷新页面后 nonce 仍在 URL 上，需要能再次回填。
+ */
 function applyPrefill() {
-  const handoff = route.query.handoff
-  if (typeof handoff === 'string' && handoff.trim()) {
+  const nonce = route.query.handoff
+  if (typeof nonce === 'string' && nonce.trim()) {
     try {
       const raw = sessionStorage.getItem('repairHandoff')
       if (raw) {
         const data = JSON.parse(raw)
-        if (data && data.nonce === handoff) {
-          if (!form.value.description && data.question) form.value.description = String(data.question).trim()
+        if (data && data.nonce === nonce) {
+          handoff.value = data
+          const steps = data.attemptedSteps || []
+          if (!form.value.description && data.question) {
+            form.value.description = String(data.question).trim() +
+              (steps.length ? `\n\n已尝试步骤：\n${steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}` : '')
+          }
           if (!form.value.categoryId && data.categoryId) form.value.categoryId = Number(data.categoryId)
           const em = normalizeEmergencyLevel(data.emergencyLevel)
-          if (em && form.value.emergencyLevel === 'low') form.value.emergencyLevel = em
-          sessionStorage.removeItem('repairHandoff')
+          if (em) form.value.emergencyLevel = em
           return
         }
       }
