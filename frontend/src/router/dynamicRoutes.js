@@ -10,6 +10,8 @@ const viewModules = {
   Files: () => import('../views/Files.vue'),
   Repair: () => import('../views/Repair.vue'),
   Knowledge: () => import('../views/Knowledge.vue'),
+  // 兼容旧库里 menu:knowledge.component = KnowledgeReview 的配置，避免落到占位页
+  KnowledgeReview: () => import('../views/Knowledge.vue'),
   Users: () => import('../views/Users.vue'),
   Roles: () => import('../views/Roles.vue')
 };
