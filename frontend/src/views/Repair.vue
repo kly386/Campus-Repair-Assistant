@@ -8,6 +8,16 @@
     </div>
 
     <el-card v-if="!submitted" shadow="never" class="form-card">
+      <el-alert v-if="handoff" title="已从自助诊断带入信息" type="info" :closable="false"
+                style="margin-bottom: 16px" show-icon>
+        <template #default>
+          <div>原问题：{{ handoff.question }}</div>
+          <div v-if="handoff.attemptedSteps && handoff.attemptedSteps.length">
+            已尝试步骤：{{ handoff.attemptedSteps.join('；') }}
+          </div>
+          <el-button link type="primary" @click="clearHandoff">清除诊断信息</el-button>
+        </template>
+      </el-alert>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="96px" class="repair-form">
         <el-divider content-position="left">故障信息</el-divider>
 
@@ -155,6 +165,58 @@ const orderId = ref(null)
 const attachments = ref([])
 const parsing = ref(false)
 const parseResult = ref(null)
+const handoff = ref(null)
+
+/**
+ * 自助诊断转报修：Diagnosis.vue 把结论放 sessionStorage，URL 只带一次性 nonce。
+ * 这里校验 nonce 后回填表单，避免把上一单的诊断信息误带到下一单。
+ */
+onMounted(() => {
+  const nonce = route.query.handoff
+  if (!nonce) return
+  try {
+    const raw = sessionStorage.getItem('repairHandoff')
+    if (!raw) return
+    const data = JSON.parse(raw)
+    if (data.nonce !== nonce) return
+    handoff.value = data
+    const steps = data.attemptedSteps || []
+    form.value.description = data.question
+      ? data.question + (steps.length ? `\n\n已尝试步骤：\n${steps.map((s, i) => `${i + 1}. ${s}`).join('\n')}` : '')
+      : form.value.description
+    if (data.categoryId) {
+      form.value.categoryId = Number(data.categoryId)
+    }
+    if (data.emergencyLevel) {
+      form.value.emergencyLevel = data.emergencyLevel === 'HIGH' ? 'high' : 'low'
+    }
+  } catch {
+    // 坏数据直接忽略，不影响正常报修
+  }
+})
+
+function clearHandoff() {
+  handoff.value = null
+  sessionStorage.removeItem('repairHandoff')
+  router.replace({ path: '/repair' })
+}
+
+/** 把诊断上下文塞进 aiParsedInfo，后端原样落库，师傅接单时可见 */
+function diagnosisInfo() {
+  const h = handoff.value
+  if (!h) return null
+  return JSON.stringify({
+    source: 'DIAGNOSIS',
+    question: h.question,
+    answer: h.answer,
+    categoryId: h.categoryId,
+    emergencyLevel: h.emergencyLevel,
+    matchedKbId: h.matchedKbId,
+    attemptedSteps: h.attemptedSteps || [],
+    diagnosisSessionId: h.diagnosisSessionId,
+    conversationId: h.conversationId
+  })
+}
 
 const phonePattern = /^1[3-9]\d{9}$|^0\d{2,3}-?\d{7,8}$/
 const rules = {
@@ -311,8 +373,9 @@ async function handleSubmit() {
   submitting.value = true
   try {
     const pr = parseResult.value
+    const h = handoff.value
     const order = await createOrder({
-      title: (pr && pr.title) || form.value.description.slice(0, 50) || '报修',
+      title: (pr && pr.title) || h?.question?.slice(0, 50) || form.value.description?.slice(0, 50) || '报修',
       description: form.value.description,
       categoryId: form.value.categoryId,
       building: form.value.building,
@@ -321,7 +384,7 @@ async function handleSubmit() {
       emergencyLevel: (form.value.emergencyLevel || 'low').toUpperCase(),
       contactPhone: form.value.contactPhone,
       backupPhone: form.value.backupPhone || null,
-      aiParsedInfo: pr ? pr.aiParsedInfo : null,
+      aiParsedInfo: pr ? pr.aiParsedInfo : diagnosisInfo(),
       aiConfidence: pr ? pr.confidence : null
     })
     const newOrderId = order.id
@@ -346,6 +409,7 @@ async function handleSubmit() {
     }
 
     submitted.value = true
+    clearHandoff()
     ElMessage.success('提交成功')
   } catch (e) {
     ElMessage.error('提交失败：' + errText(e))
@@ -372,6 +436,7 @@ function reset() {
   attachments.value = []
   resetForm()
   loadProfilePhone()
+  clearHandoff()
 }
 
 onMounted(() => {
