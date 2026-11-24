@@ -141,7 +141,7 @@ public class DashboardServiceImpl implements DashboardService {
      */
     private Map<String, Object> queryFileSummary() {
         Map<String, Object> row = jdbcTemplate.queryForMap(
-                "SELECT COUNT(*) AS cnt, COALESCE(SUM(file_size), 0) AS totalSize FROM file_object WHERE is_deleted = 0");
+                "SELECT COUNT(*) AS cnt, COALESCE(SUM(file_size), 0) AS totalSize FROM file_object");
         Map<String, Object> files = new LinkedHashMap<>(2);
         files.put("count", ((Number) row.get("cnt")).longValue());
         files.put("totalSize", ((Number) row.get("totalSize")).longValue());
