@@ -44,7 +44,7 @@
       </div>
 
       <el-table
-        :data="filteredList"
+        :data="pagedList"
         v-loading="loading"
         size="small"
         class="kb-table"
@@ -87,6 +87,21 @@
           <el-empty description="暂无数据" :image-size="72" />
         </template>
       </el-table>
+
+      <div class="pager-bar">
+        <span class="pager-total">共 {{ filteredList.length }} 条</span>
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="filteredList.length"
+          layout="sizes, prev, pager, next, jumper"
+          background
+          small
+          @size-change="onPageSizeChange"
+          @current-change="onPageChange"
+        />
+      </div>
     </el-card>
 
     <el-dialog
@@ -144,7 +159,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Search, InfoFilled, ArrowDown, ArrowUp } from '@element-plus/icons-vue';
 import {
@@ -166,6 +181,8 @@ const keyword = ref('');
 const loading = ref(false);
 const list = ref([]);
 const tipOpen = ref(false);
+const currentPage = ref(1);
+const pageSize = ref(20);
 
 const editVisible = ref(false);
 const saving = ref(false);
@@ -183,6 +200,17 @@ const filteredList = computed(() => {
     [it.title, it.keyword, it.question, it.answer].some((f) => (f || '').toLowerCase().includes(kw)));
 });
 
+const pagedList = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value;
+  return filteredList.value.slice(start, start + pageSize.value);
+});
+
+function onPageChange() {}
+
+function onPageSizeChange() {
+  currentPage.value = 1;
+}
+
 function rowClassName({ row }) {
   return row.reviewStatus === 'PENDING' ? 'row-pending' : '';
 }
@@ -192,6 +220,9 @@ function categoryName(id) {
   return c ? c.name : (id || '-');
 }
 
+watch(keyword, () => { currentPage.value = 1; });
+watch(activeStatus, () => { currentPage.value = 1; });
+
 async function load() {
   loading.value = true;
   try {
@@ -199,6 +230,8 @@ async function load() {
     const data = resp?.data || {};
     const arr = data.records || data.list || data || [];
     list.value = Array.isArray(arr) ? [...arr].sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0)) : [];
+    const maxPage = Math.max(1, Math.ceil(filteredList.value.length / pageSize.value));
+    if (currentPage.value > maxPage) currentPage.value = maxPage;
   } catch (e) {
     list.value = [];
     ElMessage.error('知识列表加载失败：' + formatApiError(e));
@@ -460,6 +493,22 @@ onMounted(load);
   background-color: #fff5e6;
 }
 
+.pager-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #f0f2f5;
+}
+
+.pager-total {
+  font-size: 13px;
+  color: #909399;
+  flex-shrink: 0;
+}
+
 .op-wrap {
   display: flex;
   align-items: center;
@@ -509,6 +558,11 @@ onMounted(load);
   .search-input {
     width: 100%;
     margin-bottom: 0;
+  }
+
+  .pager-bar {
+    flex-direction: column;
+    align-items: flex-end;
   }
 }
 </style>
