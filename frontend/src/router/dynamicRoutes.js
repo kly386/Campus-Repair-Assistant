@@ -10,8 +10,8 @@ const viewModules = {
   Files: () => import('../views/Files.vue'),
   Repair: () => import('../views/Repair.vue'),
   Knowledge: () => import('../views/Knowledge.vue'),
-  Users: () => import('../views/Placeholder.vue'),
-  Roles: () => import('../views/Placeholder.vue')
+  Users: () => import('../views/Users.vue'),
+  Roles: () => import('../views/Roles.vue')
 };
 
 let installedRouteNames = [];
