@@ -3,10 +3,13 @@ package com.example.campusrepair.service.impl;
 import com.example.campusrepair.dto.DiagnosisResult;
 import com.example.campusrepair.entity.DiagnosisSession;
 import com.example.campusrepair.repository.DiagnosisSessionRepository;
-import com.example.campusrepair.service.DashScopeChatStreamService;
+import com.example.campusrepair.service.AbortException;
+import com.example.campusrepair.service.AbortHandle;
+import com.example.campusrepair.service.AbortRegistry;
 import com.example.campusrepair.service.DiagnosisEventSink;
 import com.example.campusrepair.service.DiagnosisRules;
 import com.example.campusrepair.service.KnowledgeService;
+import com.example.campusrepair.service.ZhipuChatStreamService;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -66,8 +69,8 @@ public class DiagnosisEngine {
     private static final String CLOSING_TIP = "好的，有问题随时再来。";
 
     /**
-     * 五段式固定输出。A 方案：种子答案自带"步骤 + 成功判据"；
-     * B 兜底：prompt 明确禁止编造判据，原文没有就写"以现场现象为准"。
+     * 五段式固定输出。分步操作只列动作，不生成"成功判据"行；
+     * 种子里的判据仅在降级为知识库原文时随原文展示，不进实时生成。
      */
     private static final String SYSTEM_PROMPT = """
             你是"校园维修小助手"，只服务本校学生的宿舍设施维修自助咨询。
@@ -84,10 +87,9 @@ public class DiagnosisEngine {
                禁止使用 Markdown 标题、表格、代码块：
                ①初步判断：一两句话说明最可能的原因。
                ②先确认什么：列出需要用户先确认的 1~3 个现象。
-               ③分步操作：按知识条目原文顺序列步骤；每一步单独一行，只写动作，不要括号和判据。
-                 紧接着下一行缩进写"↳ 怎么算有效：…"，作为这一步的成功判据。
-                 判据只能照抄知识条目原文里的成功判据；原文没有就写"以现场现象为准"，
-                 禁止编造具体时间、温度、次数或任何数字，禁止把判据挤在动作同一行。
+               ③分步操作：按知识条目原文顺序列步骤；每一步单独一行，只写动作。
+                 不要写成功判据、"怎么算有效"、"以现场现象为准"等说明，
+                 不要在步骤后追加 ↳ 缩进行，也不要把判据挤在动作同一行。
                ④还不行怎么办：明确说明下一步是直接报修还是联系宿管，不要含糊其辞。
                ⑤安全提醒：涉及水电火气必须提示断电断水、不要自行拆修；
                  没有明显风险也要写一句简短提醒。
@@ -99,8 +101,9 @@ public class DiagnosisEngine {
             """;
 
     private final KnowledgeService knowledgeService;
-    private final DashScopeChatStreamService chatStreamService;
+    private final ZhipuChatStreamService chatStreamService;
     private final DiagnosisSessionRepository diagnosisSessionRepository;
+    private final AbortRegistry abortRegistry;
 
     /** 流式生成在独立线程池执行，避免长连接占住 Tomcat / WS 线程 */
     private final ExecutorService executor = Executors.newFixedThreadPool(6, r -> {
@@ -116,17 +119,27 @@ public class DiagnosisEngine {
 
     /** 提交一次诊断到后台线程执行；SSE 服务和 WS Handler 都只调这一个入口 */
     public void submit(Long userId, String question, String conversationId, DiagnosisEventSink sink) {
-        executor.submit(() -> run(userId, question, conversationId, sink));
+        // 注册中止句柄：点"停止"或连接断开时由 AbortRegistry 置位，流式回调据此立即断流
+        AbortHandle handle = abortRegistry.register(userId, conversationId);
+        executor.submit(() -> {
+            try {
+                run(userId, question, conversationId, sink, handle);
+            } finally {
+                abortRegistry.remove(userId, conversationId);
+            }
+        });
     }
 
-    /** 实际流式流程：上下文 → 检索 → meta → 分层拦截/流式生成 → 回填 → done */
-    public void run(Long userId, String question, String conversationId, DiagnosisEventSink sink) {
+    /** 实际流式流程：上下文 → 检索 → 规则拦截/流式生成 → 回填 → done（中止发 aborted） */
+    public void run(Long userId, String question, String conversationId,
+                    DiagnosisEventSink sink, AbortHandle abortHandle) {
         String q = question == null ? "" : question.trim();
         if (q.isEmpty()) {
             sink.emit("error", Map.of("message", "问题不能为空"));
             sink.complete();
             return;
         }
+        Long sessionId = null;
 
         try {
             // 1) 先取历史上下文。必须在 ask() 落库之前查，否则会把本轮问题也算进"最近对话"
@@ -134,6 +147,7 @@ public class DiagnosisEngine {
 
             // 2) 检索 + 落库（紧急等级、类别、conversationId 一并落库，供报修接力使用）
             DiagnosisResult result = knowledgeService.ask(userId, q, conversationId);
+            sessionId = result.getSessionId();
             List<DiagnosisResult.Match> matches =
                     result.getMatches() == null ? List.of() : result.getMatches();
             String fallback = result.getAnswer() == null ? "" : result.getAnswer();
@@ -213,16 +227,23 @@ public class DiagnosisEngine {
                             SYSTEM_PROMPT,
                             buildUserPrompt(q, matches, history, triedBefore),
                             token -> {
+                                // 每收到一块增量 token 先查中断标记：中止则抛异常终止上游 SSE 读取
+                                if (abortHandle.isAborted()) {
+                                    throw new AbortException();
+                                }
                                 generated.append(token);
                                 sink.emit("delta", Map.of("text", token));
-                            });
+                            },
+                            abortHandle::isAborted);
                     if (generated.toString().isBlank()) {
                         throw new IllegalStateException("模型返回空回答");
                     }
                     fullAnswer.append(generated);
+                } catch (AbortException e) {
+                    throw e; // 冒泡到外层，统一发 aborted、不回填、不计未命中
                 } catch (Exception e) {
                     // 已经吐出的 token 收不回，补一句说明后接知识库原文
-                    log.warn("DashScope 流式生成失败，降级为知识库原文: {}", e.getMessage());
+                    log.warn("智谱流式生成失败，降级为知识库原文: {}", e.getMessage());
                     degraded = true;
                     appendDelta(sink, fullAnswer,
                             "\n\n（实时生成暂不可用，以下为知识库原文）\n" + fallback);
@@ -254,6 +275,25 @@ public class DiagnosisEngine {
             done.put("matchedKbId", closing || matches.isEmpty() ? null : matches.get(0).getId());
             done.put("attemptedSteps", attemptedSteps(history, triedBefore || repairFollowUp));
             sink.emit("done", done);
+            sink.complete();
+        } catch (AbortException e) {
+            // 用户主动中止：只打标记并清空答案，不回填半截内容、不发 done。
+            // 统计里单独成一类，不混进"知识库未命中"或"报错"。
+            if (sessionId != null) {
+                try {
+                    diagnosisSessionRepository.findById(sessionId).ifPresent(session -> {
+                        session.setAborted(true);
+                        session.setAnswer(null);
+                        diagnosisSessionRepository.save(session);
+                    });
+                } catch (Exception ex) {
+                    log.warn("标记中止会话失败 sessionId={}: {}", sessionId, ex.getMessage());
+                }
+            }
+            Map<String, Object> data = new HashMap<>();
+            data.put("sessionId", sessionId);
+            data.put("conversationId", conversationId);
+            sink.emit("aborted", data);
             sink.complete();
         } catch (Exception e) {
             log.error("流式诊断失败", e);

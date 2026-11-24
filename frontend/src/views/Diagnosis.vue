@@ -13,6 +13,10 @@
           <span>已服务 {{ stats.total }} 次</span>
           <el-divider direction="vertical" />
           <span>自助解决率 <b>{{ stats.solvedRate }}%</b></span>
+          <template v-if="stats.aborted">
+            <el-divider direction="vertical" />
+            <span>主动中止 {{ stats.aborted }}</span>
+          </template>
         </div>
       </div>
     </div>
@@ -22,7 +26,7 @@
         <div v-for="(msg, i) in messages" :key="i" :class="['message', msg.role]">
           <div v-if="msg.role === 'system'" v-html="msg.text"></div>
           <template v-else>
-            <div class="msg-text" :class="{ streaming: msg.streaming }">{{ msg.text }}</div>
+            <div v-if="!msg.aborted" class="msg-text" :class="{ streaming: msg.streaming }">{{ msg.text }}</div>
 
             <div v-if="msg.lowConfidence" class="notice warn">
               回答把握不大，仅供参考；不行就直接报修，别勉强自己处理。
@@ -36,9 +40,12 @@
             <div v-if="msg.degraded" class="notice info">
               实时生成暂不可用，已自动切换为知识库原文，功能不受影响。
             </div>
+            <div v-if="msg.aborted" class="notice info">
+              已停止生成，当前回答不会保存，不会自动带出报修信息。
+            </div>
 
             <!-- 引用溯源 -->
-            <div v-if="msg.matches && msg.matches.length" class="ref-block">
+            <div v-if="!msg.aborted && msg.matches && msg.matches.length" class="ref-block">
               <div class="ref-toggle" @click="msg.showRefs = !msg.showRefs">
                 <span>📚 参考了 {{ msg.matches.length }} 条知识{{ msg.showRefs ? '（收起）' : '（展开）' }}</span>
                 <el-tag size="small" type="success">{{ msg.searchMode === 'VECTOR' ? '语义检索' : '关键词检索' }}</el-tag>
@@ -57,7 +64,7 @@
             </div>
 
             <!-- 追问建议 -->
-            <div v-if="!msg.closed && msg.suggestions && msg.suggestions.length && msg.done" class="suggestions">
+            <div v-if="!msg.aborted && !msg.closed && msg.suggestions && msg.suggestions.length && msg.done" class="suggestions">
               <span class="suggest-label">你还可以问：</span>
               <button v-for="(s, si) in msg.suggestions" :key="si" class="suggest-chip" type="button" @click="ask(s)">
                 {{ s }}
@@ -65,13 +72,13 @@
             </div>
 
             <!-- 反馈闭环 + 转报修 -->
-            <div v-if="!msg.closed && !msg.triedBefore && msg.done && !msg.feedbackDone" class="feedback-area">
+            <div v-if="!msg.aborted && !msg.closed && !msg.triedBefore && msg.done && !msg.feedbackDone" class="feedback-area">
               <span>上面的方法解决您的问题了吗？</span>
               <el-button size="small" type="success" @click="feedback(msg, true)">解决了</el-button>
               <el-button size="small" type="info" @click="feedback(msg, false)">没解决</el-button>
               <el-button size="small" type="warning" plain @click="goRepair(msg)">直接报修</el-button>
             </div>
-            <div v-else-if="msg.feedbackDone" class="feedback-done">已收到您的反馈，谢谢</div>
+            <div v-else-if="msg.feedbackDone && !msg.aborted" class="feedback-done">已收到您的反馈，谢谢</div>
           </template>
         </div>
 
@@ -104,6 +111,15 @@
           @keyup.enter="ask"
         />
         <el-button type="primary" :loading="loading" @click="ask">发送</el-button>
+        <el-button
+          v-if="loading && activeIsWs"
+          type="danger"
+          plain
+          :disabled="abortRequested"
+          @click="stopGeneration"
+        >
+          {{ abortRequested ? '正在停止…' : '停止生成' }}
+        </el-button>
       </div>
     </el-card>
   </div>
@@ -122,7 +138,7 @@ const loading = ref(false);
 const stage = ref('search');
 const chatAreaRef = ref(null);
 const hotQuestions = ref([]);
-const stats = ref({ total: 0, feedback: 0, solvedRate: 0 });
+const stats = ref({ total: 0, feedback: 0, solvedRate: 0, aborted: 0 });
 
 const ws = ref(null);
 const wsStatus = ref('connecting'); // connecting | connected | fallback
@@ -134,6 +150,10 @@ let doneResolve = null;
 let doneReject = null;
 let feedbackResolve = null;
 let intentionalClose = false;
+// 停止按钮只在 WS 通道显示：SSE 是 fetch 流，发上行 abort 没有对应通路
+const activeIsWs = ref(false);
+const abortRequested = ref(false);
+let abortTimer = null;
 
 const connText = computed(() => ({
   connecting: '正在连接实时通道…',
@@ -256,6 +276,20 @@ function handleEvent(type, data, msg) {
     msg.diagnosisSessionId = data.diagnosisSessionId || data.sessionId || null;
     msg.conversationId = data.conversationId || conversationId.value;
     finishMessage(msg);
+  } else if (type === 'aborted') {
+    // 用户主动中止：半截答案不保留，不回填；done=true 只为阻止重发，
+    // 反馈/追问/报修接力全部由 msg.aborted 在模板里屏蔽
+    msg.aborted = true;
+    msg.text = '';
+    msg.streaming = false;
+    msg.matches = [];
+    msg.suggestions = [];
+    msg.done = true;
+    if (abortTimer) {
+      clearTimeout(abortTimer);
+      abortTimer = null;
+    }
+    scrollBottom();
   }
 }
 
@@ -267,10 +301,10 @@ function handleWsEvent(type, data) {
   }
   const msg = activeMsg;
   if (!msg) return;
-  if (type === 'meta' || type === 'delta' || type === 'done') {
+  if (type === 'meta' || type === 'delta' || type === 'done' || type === 'aborted') {
     handleEvent(type, data, msg);
   }
-  if (type === 'done') {
+  if (type === 'done' || type === 'aborted') {
     doneResolve?.();
     clearPending();
     activeMsg = null;
@@ -298,6 +332,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   intentionalClose = true;
   if (reconnectTimer) clearTimeout(reconnectTimer);
+  if (abortTimer) clearTimeout(abortTimer);
   if (ws.value) ws.value.close();
   ws.value = null;
 });
@@ -311,10 +346,17 @@ async function ask(text) {
   question.value = '';
   loading.value = true;
   stage.value = 'search';
+  activeIsWs.value = false;
+  abortRequested.value = false;
+  if (abortTimer) {
+    clearTimeout(abortTimer);
+    abortTimer = null;
+  }
   scrollBottom();
 
   const msg = {
     role: 'assistant',
+    aborted: false,
     question: q,
     text: '',
     streaming: false,
@@ -344,6 +386,7 @@ async function ask(text) {
   try {
     if (isWsReady()) {
       usedWs = true;
+      activeIsWs.value = true;
       const done = new Promise((resolve, reject) => {
         doneResolve = resolve;
         doneReject = reject;
@@ -355,10 +398,11 @@ async function ask(text) {
       }));
       await done;
     } else {
+      activeIsWs.value = false;
       await streamAsk(q, msg);
     }
   } catch (e) {
-    if (usedWs && !msg.done) {
+    if (usedWs && !msg.done && !msg.aborted) {
       // WS 已连上但 done 前断开：同一问题用 SSE 重发一次，清空已收到的半截文本
       msg.text = '';
       msg.streaming = false;
@@ -374,10 +418,35 @@ async function ask(text) {
   } finally {
     loading.value = false;
     msg.streaming = false;
+    if (abortTimer) {
+      clearTimeout(abortTimer);
+      abortTimer = null;
+    }
     if (activeMsg === msg) activeMsg = null;
+    activeIsWs.value = false;
     clearPending();
     scrollBottom();
   }
+}
+
+/** 用户点"停止生成"：WS 上行 abort，后端断上游 SSE 并发 aborted 事件 */
+function stopGeneration() {
+  if (!activeMsg || abortRequested.value || !isWsReady()) return;
+  abortRequested.value = true;
+  const target = activeMsg;
+  ws.value.send(JSON.stringify({
+    type: 'abort',
+    conversationId: conversationId.value
+  }));
+  // 服务端 aborted 丢失时本地兜底收尾，避免 loading 卡死。
+  // 这里 resolve 而不是 reject，防止被 ask 的 catch 当成断链去重发 SSE。
+  abortTimer = setTimeout(() => {
+    if (activeMsg !== target || target.aborted) return;
+    handleEvent('aborted', {}, target);
+    doneResolve?.();
+    clearPending();
+    activeMsg = null;
+  }, 3000);
 }
 
 /** fetch + ReadableStream 读取 SSE（降级通道），解析 event: / data: 块 */
@@ -398,6 +467,7 @@ async function streamAsk(q, msg) {
   const decoder = new TextDecoder('utf-8');
   let buffer = '';
   let finished = false;
+  let aborted = false;
 
   const consume = (block) => {
     let event = 'message';
@@ -414,11 +484,12 @@ async function streamAsk(q, msg) {
       return;
     }
     handleEvent(event, payload, msg);
-    if (event === 'done') finished = true;
+    if (event === 'done' || event === 'aborted') finished = true;
+    if (event === 'aborted') aborted = true;
     if (event === 'error') throw new Error(payload.message || '流式生成失败');
   };
 
-  while (true) {
+  while (!aborted) {
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');

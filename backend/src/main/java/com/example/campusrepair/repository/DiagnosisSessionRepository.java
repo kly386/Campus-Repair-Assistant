@@ -28,8 +28,11 @@ public interface DiagnosisSessionRepository extends JpaRepository<DiagnosisSessi
     List<DiagnosisSession> findTop3ByConversationIdAndUserIdOrderByGmtCreateDesc(
             String conversationId, Long userId);
 
-    /** 未命中知识条目数（matched_kb_id 为空，用于转人工占比） */
-    long countByMatchedKbIdIsNull();
+    /** 未命中数：排除用户主动中止，否则中止会被冤枉算成"知识库没匹配上" */
+    long countByMatchedKbIdIsNullAndAbortedFalse();
+
+    /** 用户主动中止数（点停止 / 连接断开），统计报表单独一类 */
+    long countByAbortedTrue();
 
     /** 热门问题 Top-N：按问题文本分组计数降序 */
     @Query("select s.question, count(s) from DiagnosisSession s group by s.question order by count(s) desc")

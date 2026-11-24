@@ -176,6 +176,7 @@ CREATE TABLE IF NOT EXISTS `diagnosis_session` (
     `emergency_level` VARCHAR(16)     DEFAULT 'NORMAL' COMMENT '诊断结论紧急等级: HIGH/NORMAL',
     `similarity`      DECIMAL(4,3)    DEFAULT NULL COMMENT '检索相似度(0~1)',
     `is_solved`       TINYINT(1) UNSIGNED DEFAULT NULL COMMENT '是否自助解决: NULL未反馈/0未解决/1已解决',
+    `aborted`         TINYINT(1) UNSIGNED NOT NULL DEFAULT 0 COMMENT '用户是否主动中止: 0正常/1点停止或断链',
     `gmt_create`      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '提问时间',
     `gmt_modified`    DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     CONSTRAINT `pk_id` PRIMARY KEY (`id`),

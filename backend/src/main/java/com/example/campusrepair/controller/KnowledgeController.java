@@ -9,6 +9,7 @@ import com.example.campusrepair.entity.KnowledgeHistory;
 import com.example.campusrepair.security.RequirePermission;
 import com.example.campusrepair.service.KnowledgeService;
 import com.example.campusrepair.service.KnowledgeStreamService;
+import com.example.campusrepair.service.KnowledgeVectorCache;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -42,6 +43,7 @@ public class KnowledgeController {
 
     private final KnowledgeService knowledgeService;
     private final KnowledgeStreamService knowledgeStreamService;
+    private final KnowledgeVectorCache knowledgeVectorCache;
 
     /* ---------- 学生口 ---------- */
 
@@ -118,6 +120,14 @@ public class KnowledgeController {
                                         @RequestParam(defaultValue = "true") boolean solved) {
         knowledgeService.markSolved(sessionId, AuthContext.userId(), solved);
         return ApiResponse.success("感谢反馈", null);
+    }
+
+    /** 手动刷新知识库内存向量缓存：不用重启 SpringBoot 即可让新增/审核条目生效 */
+    @PostMapping("/cache/refresh")
+    @RequirePermission("knowledge:manage")
+    public ApiResponse<Map<String, Object>> refreshCache() {
+        knowledgeVectorCache.refresh();
+        return ApiResponse.success("知识库缓存已刷新", Map.of("cachedEntries", knowledgeVectorCache.cachedSize()));
     }
 
     /* ---------- 管理员口 ---------- */

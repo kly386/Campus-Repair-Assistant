@@ -62,11 +62,14 @@ public class KnowledgeStreamServiceImpl implements KnowledgeStreamService {
         long total = diagnosisSessionRepository.count();
         long solved = diagnosisSessionRepository.countByIsSolvedTrue();
         long feedback = diagnosisSessionRepository.countByIsSolvedIsNotNull();
-        long noHit = diagnosisSessionRepository.countByMatchedKbIdIsNull();
+        long aborted = diagnosisSessionRepository.countByAbortedTrue();
+        // 中止不进"未命中"：那是另一类（用户主动停止），混进来会让统计失真
+        long noHit = diagnosisSessionRepository.countByMatchedKbIdIsNullAndAbortedFalse();
         Map<String, Object> result = new HashMap<>();
         result.put("total", total);
         result.put("solved", solved);
         result.put("feedback", feedback);
+        result.put("aborted", aborted);
         result.put("noHit", noHit);
         // 分母用"已反馈数"，未反馈的会话不算没解决，避免解决率被稀释得很难看
         result.put("solvedRate", feedback == 0 ? 0.0
