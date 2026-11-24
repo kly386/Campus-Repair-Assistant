@@ -1,5 +1,6 @@
 package com.example.campusrepair.websocket;
 
+import com.example.campusrepair.service.AbortRegistry;
 import com.example.campusrepair.service.KnowledgeService;
 import com.example.campusrepair.service.impl.DiagnosisEngine;
 import com.example.campusrepair.service.impl.WebSocketEventSink;
@@ -36,6 +37,7 @@ public class DiagnosisWebSocketHandler extends TextWebSocketHandler {
 
     private final DiagnosisEngine diagnosisEngine;
     private final KnowledgeService knowledgeService;
+    private final AbortRegistry abortRegistry;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -69,6 +71,11 @@ public class DiagnosisWebSocketHandler extends TextWebSocketHandler {
                     diagnosisEngine.submit(userId, question, conversationId, sink);
                 }
                 case "feedback" -> handleFeedback(sink, node, userId);
+                case "abort" -> {
+                    String conversationId = node.path("conversationId").asText(null);
+                    abortRegistry.abort(userId, conversationId);
+                    log.info("WS 收到中止请求 userId={} conversationId={}", userId, conversationId);
+                }
                 default -> sink.emit("error", Map.of("message", "不支持的消息类型：" + type));
             }
         } catch (Exception e) {
@@ -113,6 +120,8 @@ public class DiagnosisWebSocketHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         log.info("WS 诊断连接关闭 session={} status={}", session.getId(), status);
+        // 浏览器断开后中止该用户全部运行中的任务，避免继续消耗大模型 token
+        abortRegistry.abortAllByUser(userId(session));
     }
 
     @Override

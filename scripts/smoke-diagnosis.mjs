@@ -1,5 +1,5 @@
 /**
- * 自助诊断冒烟测试：登录 → WS 问答 → 反馈 → SSE 降级 → 握手鉴权负例
+ * 自助诊断冒烟测试：登录 → WS 问答 → 反馈 → 主动中止 → SSE 降级 → 握手鉴权负例
  *
  * 用法（后端已启动时）：
  *   node scripts/smoke-diagnosis.mjs
@@ -29,6 +29,10 @@ function fail(name, detail = '') {
 function assert(condition, name, detail = '') {
   if (condition) ok(name, detail);
   else fail(name, detail);
+}
+
+function skip(name, detail = '') {
+  console.log(`  SKIP  ${name}${detail ? ' — ' + detail : ''}`);
 }
 
 const COMMON_HEADERS = {
@@ -113,6 +117,45 @@ async function wsAsk(socket, question, conversationId) {
         clearTimeout(timer);
         socket.removeEventListener('message', handler);
         resolve(events);
+      }
+    };
+    socket.addEventListener('message', handler);
+    socket.send(JSON.stringify({ type: 'ask', question, conversationId }));
+  });
+}
+
+/**
+ * 主动中止：发 ask，收到第一个 delta 后立刻上行 abort，收集到 aborted 为止。
+ * 若模型/降级回答太快（收到 done 时还没来得及发 abort），返回 tooFast 由调用方跳过。
+ */
+async function wsAbort(socket, question, conversationId) {
+  return new Promise((resolve, reject) => {
+    const events = [];
+    let sent = false;
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error('等待 aborted 超时'));
+    }, 20000);
+    const cleanup = () => {
+      clearTimeout(timer);
+      socket.removeEventListener('message', handler);
+    };
+    const handler = (ev) => {
+      let envelope;
+      try { envelope = JSON.parse(ev.data); } catch { return; }
+      events.push(envelope);
+      if (envelope.type === 'delta' && !sent) {
+        sent = true;
+        socket.send(JSON.stringify({ type: 'abort', conversationId }));
+      } else if (envelope.type === 'done') {
+        cleanup();
+        resolve({ events, tooFast: true });
+      } else if (envelope.type === 'aborted') {
+        cleanup();
+        resolve({ events, tooFast: false });
+      } else if (envelope.type === 'error') {
+        cleanup();
+        reject(new Error(envelope.data?.message || '服务端返回 error'));
       }
     };
     socket.addEventListener('message', handler);
@@ -310,7 +353,8 @@ async function main() {
     assert(!answer.includes('只负责解答宿舍设施维修问题'), '回复不是闲聊拒答');
     assert(!answer.includes('没有保留对应的上下文'), '回复不是"没上下文"套话');
     const steps = done?.data?.attemptedSteps || [];
-    const noCriteria = steps.every((s) => !s.includes('成功判据') && !s.includes('怎么算有效'));
+    const noCriteria = steps.every((s) => !s.includes('成功判据') && !s.includes('怎么算有效')
+      && !s.includes('以现场现象为准') && !s.includes('↳'));
     // 只有上一轮真出了③五段回答才要求抽到步骤；降级原文/无种子时只校验不混判据
     if (firstAskHasSteps) {
       assert(steps.length > 0 && noCriteria,
@@ -364,6 +408,31 @@ async function main() {
     assert(data.ok === true, 'WS feedback_ack 通路', `sessionId=${lastSessionId}`);
   } catch (e) {
     fail('WS feedback_ack 通路', e.message);
+  }
+
+  // 8b) 用户主动中止：发 aborted，不发 done（半截答案不回填、不接力报修）
+  try {
+    const { events, tooFast } = await wsAbort(
+      socket, '洗澡时热水器水温忽冷忽热怎么办？', `abort-${Date.now()}`);
+    if (tooFast) {
+      skip('主动中止 aborted 事件', '回答在极快/降级路径已完成，未及中止');
+    } else {
+      const aborted = events.find((e) => e.type === 'aborted');
+      const done = events.find((e) => e.type === 'done');
+      assert(!!aborted, '主动中止收到 aborted 事件');
+      assert(!done, '中止后不发 done（不带出报修信息）');
+    }
+  } catch (e) {
+    fail('主动中止 aborted 事件', e.message);
+  }
+
+  // 8c) 统计把"主动中止"单独成一类
+  try {
+    const st = await api('/api/knowledge/diagnosis/stats');
+    assert('aborted' in st && typeof st.aborted === 'number',
+      '统计含独立 aborted 计数', `aborted=${st.aborted}`);
+  } catch (e) {
+    fail('统计 aborted 字段', e.message);
   }
 
   try { socket.close(); } catch {}

@@ -61,6 +61,11 @@ public class DiagnosisSession {
     @Column(name = "is_solved")
     private Boolean isSolved;
 
+    /** 用户是否主动中止生成：0=正常 / 1=点停止或连接断开。
+     *  单独标记，避免中止被统计成"知识库未命中"或"报错" */
+    @Column(name = "aborted", nullable = false)
+    private Boolean aborted;
+
     @Column(name = "gmt_create")
     private LocalDateTime gmtCreate;
 
